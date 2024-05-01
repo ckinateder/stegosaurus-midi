@@ -1,6 +1,0 @@
-[submodule "stegosaurus-interface"]
-	path = stegosaurus-interface
-	url = git@github.com:ckinateder/stegosaurus-interface.git
-[submodule "stegosaurus-firmware"]
-	path = stegosaurus-firmware
-	url = git@github.com:ckinateder/stegosaurus-firmware.git
