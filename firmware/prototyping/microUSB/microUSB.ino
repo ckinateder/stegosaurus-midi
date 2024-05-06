@@ -67,9 +67,8 @@ static void onSystemExclusive(byte *data, unsigned int length) {
 
   // assign last bit
   bool last = false;
-  if(lastBit == 0xF7) {
+  if(lastBit == 0xF7)
     last = true;
-  } 
 
   // print
   xprintf("SysEx Message (%dB): ", length);
@@ -79,6 +78,20 @@ static void onSystemExclusive(byte *data, unsigned int length) {
   } else {
     Serial.println(F(" (tbc)"));
   }
+
+  // exit if not last
+  if(!last)
+  {
+    Serial.println(F("Aborting SysEx! Not last message. This isn't supported yet."));
+    return;
+  }
+
+  // ensure vendor id
+  if( checkVendor(data, length) ){
+    Serial.println(F("Vendor matches"));
+
+  }
+
 }
 
 static void onControlChange(byte channel, byte number, byte value) {
@@ -99,6 +112,12 @@ static void onMessageUSB(const MidiMessage& message) {
     MIDICoreUSB.send(message);
   }
   // flashLed();
+}
+
+bool checkVendor(const byte *data, unsigned int size) {
+  if(size < 5) // if not long enough to contain the needed bytes, then it doesn't match
+    return false;
+  return ( *(data + 1) == 0x00 && *(data + 2) == MFID_1 && *(data + 3) == MFID_2 );
 }
 
 // -- utility 
