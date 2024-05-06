@@ -6,6 +6,9 @@
 #define LED_PIN 13
 #define VSN "0.1.0"
 
+#define MFID_1 0x53
+#define MFID_2 0x4d
+
 // MIDIUSB Cable
 #define MIDICoreUSB_Cable 0 // this corresponds to the virtual "port" or "cable". stick to 0.
 
@@ -14,18 +17,16 @@ using namespace MIDI_NAMESPACE;
 typedef Message<MIDI_NAMESPACE::DefaultSettings::SysExMaxSize> MidiMessage;
 
 // create midi instances
-USBMIDI_CREATE_INSTANCE(MIDICoreUSB_Cable, MIDICoreUSB);
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, MIDICoreSerial);
+USBMIDI_CREATE_INSTANCE(MIDICoreUSB_Cable, MIDICoreUSB);
 
 // bools
 bool echoUSBtoSerial = true;
 bool echoUSBtoUSB = true;
 
 void setup() {
-  // put your setup code here, to run once:
   Serial.begin(9600);
-
-  while(!Serial);
+  while(!Serial); // wait for Serial to be ready
   
   // print welcome
   xprintf("Welcome to Stegosaurus v%s!\n", VSN);
@@ -40,7 +41,6 @@ void setup() {
   MIDICoreUSB.setHandleControlChange(onControlChange);
   MIDICoreUSB.setHandleProgramChange(onProgramChange);
   MIDICoreUSB.setHandleSystemExclusive(onSystemExclusive); 
-  //MIDICoreUSB.setHandleSystemExclusive(onSystemExclusiveChunk);
 
   // echo all USB messages to devices on the serial
   MIDICoreUSB.setHandleMessage(onMessageUSB);
@@ -72,7 +72,7 @@ static void onSystemExclusive(byte *data, unsigned int length) {
   } 
 
   // print
-  Serial.print(F("SysEx Message: "));
+  xprintf("SysEx Message (%dB): ", length);
   printBytes(data, length);
   if (last) {
     Serial.println(F(" (end)"));
@@ -112,7 +112,6 @@ void printBytes(const byte *data, unsigned int size) {
   }
 }
 
-//utility functions
 void xprintf(const char *format, ...)
 {
   char buffer[256];  // or smaller or static &c.
