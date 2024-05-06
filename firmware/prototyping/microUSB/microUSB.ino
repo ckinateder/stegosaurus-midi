@@ -3,6 +3,7 @@
 #include <EasyButton.h>
 #include <time.h>
 
+#define LED_PIN 13
 #define VSN "0.1.0"
 
 // MIDIUSB Cable
@@ -25,11 +26,15 @@ void setup() {
   Serial.begin(9600);
 
   while(!Serial);
-
+  
   // print welcome
   xprintf("Welcome to Stegosaurus v%s!\n", VSN);
   xprintf("Echoing USB messages over Serial: %s.\n", echoUSBtoSerial ? "true" : "false");
   xprintf("Echoing USB messages back over USB (only for debugging!): %s.\n", echoUSBtoUSB ? "true" : "false");
+
+  // setup LED
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);  // LED off
 
   // set handlers
   MIDICoreUSB.setHandleControlChange(onControlChange);
@@ -93,6 +98,7 @@ static void onMessageUSB(const MidiMessage& message) {
   if(echoUSBtoUSB){
     MIDICoreUSB.send(message);
   }
+  // flashLed();
 }
 
 // -- utility 
@@ -115,4 +121,10 @@ void xprintf(const char *format, ...)
   vsprintf(buffer, format, args);
   va_end(args);
   Serial.print(buffer);
+}
+
+void flashLed(){
+  digitalWrite(LED_PIN, HIGH);
+  delay(100);
+  digitalWrite(LED_PIN, LOW);
 }
