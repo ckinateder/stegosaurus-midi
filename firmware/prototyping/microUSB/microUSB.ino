@@ -79,19 +79,15 @@ static void onSystemExclusive(byte *data, unsigned int length) {
     Serial.println(F(" (tbc)"));
   }
 
-  // exit if not last
-  if(!last)
-  {
-    Serial.println(F("Aborting SysEx! Not last message. This isn't supported yet."));
-    return;
-  }
+  // exit if not last bit
+  if(last && checkVendor(data, length))
+    parseSysExMessage(data, length);
+  else
+    Serial.println(F("Unexplained issue! The SysEx message is not getting processed"));
+}
 
-  // ensure vendor id
-  if( checkVendor(data, length) ){
-    Serial.println(F("Vendor matches"));
-
-  }
-
+static void parseSysExMessage(byte *data, unsigned int length) {
+  
 }
 
 static void onControlChange(byte channel, byte number, byte value) {
