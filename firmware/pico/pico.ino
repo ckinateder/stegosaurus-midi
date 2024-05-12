@@ -1,7 +1,23 @@
-// includes
-#include <USB-MIDI.h>
-#include <EasyButton.h>
-#include <time.h>
+/*********************************************************************
+ Adafruit invests time and resources providing this open source code,
+ please support Adafruit and open-source hardware by purchasing
+ products from Adafruit!
+
+ MIT license, check LICENSE for more information
+ Copyright (c) 2019 Ha Thach for Adafruit Industries
+ All text above, and the splash screen below must be included in
+ any redistribution
+*********************************************************************/
+
+/* This sketch is enumerated as USB MIDI device. 
+ * Following library is required
+ * - MIDI Library by Forty Seven Effects
+ *   https://github.com/FortySevenEffects/arduino_midi_library
+ */
+
+#include <Arduino.h>
+#include <Adafruit_TinyUSB.h>
+#include <MIDI.h>
 
 #define LED_PIN 13
 #define VSN "0.1.0"
@@ -19,38 +35,48 @@
 using namespace MIDI_NAMESPACE;
 typedef Message<MIDI_NAMESPACE::DefaultSettings::SysExMaxSize> MidiMessage;
 
-// create midi instances
+// USB MIDI object, with 1 cable
+Adafruit_USBD_MIDI USB_MIDI_Transport(1);
+
+// Create a new instance of the Arduino MIDI Library,
+// and attach usb_midi as the transport.
+MIDI_CREATE_INSTANCE(Adafruit_USBD_MIDI, USB_MIDI_Transport, MIDICoreUSB);
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, MIDICoreSerial);
-USBMIDI_CREATE_INSTANCE(MIDICoreUSB_Cable, MIDICoreUSB);
 
 // bools
 bool echoUSBtoSerial = true;
-bool echoUSBtoUSB = true;
 
-void setup() {
-  Serial.begin(9600);
-  while(!Serial); // wait for Serial to be ready
-  
-  // print welcome
-  xprintf("Welcome to Stegosaurus v%s!\n", VSN);
-  xprintf("Echoing USB messages over Serial: %s.\n", echoUSBtoSerial ? "true" : "false");
-  xprintf("Echoing USB messages back over USB (only for debugging!): %s.\n", echoUSBtoUSB ? "true" : "false");
+void setup()
+{
+  // start serial
+  Serial.begin(115200);
 
-  // setup LED
-  pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW);  // LED off
+  // Manual begin() is required on core without built-in support for TinyUSB such as mbed rp2040
+  #if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
+    TinyUSB_Device_Init(0);
+  #endif
+
+  // set names
+  USBDevice.setManufacturerDescriptor     ("CJK Devices                     ");
+  USBDevice.setProductDescriptor          ("Stegosaurus (PICO)              ");
+  USB_MIDI_Transport.setStringDescriptor  ("Stegosaurus MIDI");
+  //USB_MIDI_Transport.setCableName         (1, "Controller");
 
   // set handlers
   MIDICoreUSB.setHandleControlChange(onControlChange);
   MIDICoreUSB.setHandleProgramChange(onProgramChange);
   MIDICoreUSB.setHandleSystemExclusive(onSystemExclusive); 
 
+  // set to receieve all channels - in configuration, filter them out
+  MIDICoreUSB.begin(MIDI_CHANNEL_OMNI);
+  MIDICoreSerial.begin(MIDI_CHANNEL_OMNI); // receive on all channels
+
   // echo all USB messages to devices on the serial
   MIDICoreUSB.setHandleMessage(onMessageUSB);
 
-  // set to receieve all channels - in configuration, filter them out
-  MIDICoreSerial.begin(MIDI_CHANNEL_OMNI); // receive on all channels
-  MIDICoreUSB.begin(MIDI_CHANNEL_OMNI); // receive on all channels
+  pinMode(LED_BUILTIN, OUTPUT);
+  // wait until device mounted
+  while( !TinyUSBDevice.mounted() ) delay(1);
 }
 
 void loop() {
@@ -112,14 +138,8 @@ static void onProgramChange(byte channel, byte number) {
 
 // echo all messages over usb
 static void onMessageUSB(const MidiMessage& message) {
-  if(echoUSBtoSerial){
-    //Serial.println("Echoing message from USB to DIN.");
+  if(echoUSBtoSerial)
     MIDICoreSerial.send(message);
-  }
-  if(echoUSBtoUSB){
-    MIDICoreUSB.send(message);
-  }
-  // flashLed();
 }
 
 bool checkVendor(const byte *data, unsigned int size) {

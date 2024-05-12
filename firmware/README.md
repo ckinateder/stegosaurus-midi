@@ -1,6 +1,4 @@
-# stegosaurus-firmware
-
-
+# stegosaurus
 
 ## Project Structure
 
@@ -13,14 +11,22 @@ THis project is organized as follows:
 
 ### Firmware
 
-This is currently built on a Teensy 4.0. It should also work with any ATMega32U4 board, such as the Arduino Micro, HOWEVER, the USB name on the Micro will show up as just "Arduino Micro". The firmware is written in C++ and uses the Arduino framework. 
-Make sure you have the arduino IDE installed, and the Teensyduino add-on. See the [Teensyduino](https://www.pjrc.com/teensy/td_download.html) page for more information. The following libraries are required:
+#### Raspberry Pi Pico
 
-- [Arduino MIDI Library](https://github.com/FortySevenEffects/arduino_midi_library) (@v5.0.2)
-- [Arduino USBMIDI](https://github.com/lathoub/Arduino-USBMIDI) (@v1.1.2)
+This is currently being switched over to work with the Raspberry Pi Pico.
+To set it up in the Arduino IDE, follow [this guide](https://randomnerdtutorials.com/programming-raspberry-pi-pico-w-arduino-ide/). You will probably have to hold down the BOOTSEL button while plugging in the Pico to get it into bootloader mode for the first time. Pay attention to these upload settings:
+
+![upload settings](../img/settings.png).
+
+Make sure the selected port matches the port that the Pico is connected to.
+
+Required libraries:
+
 - [EasyButton](https://github.com/evert-arias/EasyButton) (@v2.0.3)
+- [Adafruit TinyUSB](https://github.com/adafruit/Adafruit_TinyUSB_Arduino) (@v3.1.4)
 
-You'll need to change the USB type to "Serial + MIDI" in the Arduino IDE. This is done by going to `Tools > USB Type` and selecting "Serial + MIDI".
+https://electronics.stackexchange.com/questions/623026/problem-working-with-midi-on-hardware-serial-port-on-raspberry-pi-pico-2040
+
 
 ### Interface
 
@@ -51,3 +57,19 @@ This SysEx message will be used to change the behavior of the controller.
 | 4    | Message type (cc/pc), channel |
 | 5    | Message number |
 | 6    | Message value (if needed, for cc message) |
+
+
+## TRASH
+
+#### Teensy 4.0
+
+[DEPRECATED]
+
+This is currently built on a Teensy 4.0. It should also work with any ATMega32U4 board, such as the Arduino Micro, HOWEVER, the USB name on the Micro will show up as just "Arduino Micro". The firmware is written in C++ and uses the Arduino framework. 
+Make sure you have the arduino IDE installed, and the Teensyduino add-on. See the [Teensyduino](https://www.pjrc.com/teensy/td_download.html) page for more information. The following libraries are required:
+
+- [Arduino MIDI Library](https://github.com/FortySevenEffects/arduino_midi_library) (@v5.0.2)
+- [Arduino USBMIDI](https://github.com/lathoub/Arduino-USBMIDI) (@v1.1.2)
+- [EasyButton](https://github.com/evert-arias/EasyButton) (@v2.0.3)
+
+You'll need to change the USB type to "Serial + MIDI" in the Arduino IDE. This is done by going to `Tools > USB Type` and selecting "Serial + MIDI".
