@@ -27,7 +27,7 @@ Required libraries:
 - [EasyButton](https://github.com/evert-arias/EasyButton) (@v2.0.3)
 - [Adafruit TinyUSB](https://github.com/adafruit/Adafruit_TinyUSB_Arduino) (@v3.1.4)
 
-https://electronics.stackexchange.com/questions/623026/problem-working-with-midi-on-hardware-serial-port-on-raspberry-pi-pico-2040
+[This link](https://electronics.stackexchange.com/questions/623026/problem-working-with-midi-on-hardware-serial-port-on-raspberry-pi-pico-2040) should help with hardware midi on the Pico.
 
 
 ### Interface

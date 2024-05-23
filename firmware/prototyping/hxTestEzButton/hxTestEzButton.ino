@@ -24,7 +24,7 @@ EasyButton button3(SWITCH_3_PIN, debounce, pullup, true);
 EasyButton button4(SWITCH_4_PIN, debounce, pullup, true);
 
 // set channels
-byte HELIX_CHANNEL = 1;
+byte HELIX_CHANNEL = 16;
 
 struct pc {
   byte programNumber;
@@ -71,7 +71,7 @@ void button4Pressed(){
 void setup() {
   // init serial and MIDI
   Serial.begin(115200);
-  MIDI.begin();
+  MIDI.begin(MIDI_CHANNEL_OMNI);
   
   // onboard LED
   pinMode(LED_PIN, OUTPUT);
@@ -88,13 +88,25 @@ void setup() {
   button2.begin();
   button3.begin();
   button4.begin();
+
+  MIDI.setHandleControlChange(onControlChange);
+  MIDI.setHandleProgramChange(onProgramChange);
+}
+
+
+static void onControlChange(byte channel, byte number, byte value) {
+  xprintf("ControlChange from channel: %d, number: %d, value: %d\n", channel, number, value);
+}
+
+static void onProgramChange(byte channel, byte number) {
+  xprintf("ProgramChange from channel: %d, number: %d\n", channel, number);
 }
 
 // the loop() methor runs over and over again,
 // as long as the board has power
 
 void loop() {
-  digitalWrite(LED_PIN, LOW);  // LED off
+  MIDI.read();
   button1.read();
   button2.read();
   button3.read();

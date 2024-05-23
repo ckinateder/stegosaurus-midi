@@ -1,4 +1,4 @@
-# stegosaurus
+# stegosaurus-firmware
 
 ## Project Structure
 
