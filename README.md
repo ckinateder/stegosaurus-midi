@@ -29,6 +29,10 @@ Required libraries:
 
 [This link](https://electronics.stackexchange.com/questions/623026/problem-working-with-midi-on-hardware-serial-port-on-raspberry-pi-pico-2040) should help with hardware midi on the Pico.
 
+TODO:
+- [ ] Add hardware MIDI support to the Pico
+- [ ] Start using the linker instead of the Arduino IDE
+- [ ] Add SysEx support to the Pico
 
 ### Interface
 
@@ -52,13 +56,14 @@ This SysEx message will be used to change the behavior of the controller.
  
 | Byte | Value                                                                 |
 |------|----------------------------------------------------------------------|
-| 0    | Left nybble denotes the operation. 0x0 for modify preset operation. Right nybble denotes whether or not to save to EEPROM or not. 0x0 for no, 0x1 for yes. For example, 0x01 for modify preset and write to EEPROM; 0x00 for modify preset but not write to EEPROM (probably for debugging). |
+| 0    | Left nybble denotes the operation. 0x0 for modify preset operation. Right nybble denotes whether or not to save to EEPROM or not. 0x0 for no, 0x1 for yes. For example, 0x01 for modify preset and write to EEPROM; 0x00 for modify preset but not write to EEPROM (probably just for debugging). |
 | 1    | Preset (allow up to 0-127)  |
-| 2    | Only using the right nybble. Trigger on enter preset, exit preset, or switch press number (0x0 to 0x03 switch number, 0xE for on preset entry, 0xF for on preset exit). |
+| 2    | This denotes on which event to send the message. The left nybble denotes the event, and the right nybble denotes the switch number. 0x0 for on preset entry, 0x1 for on preset exit, 0x2 for on switch press. The right nybble is the switch number (0x0 to 0x3), only if the left nybble is 0x2. For example, 0x10 for preset exit, 0x21 for switch 1 press. |
 | 3    | Storage location for preset (1 byte would allow 256 different locations per byte, but that’s too many - I think up to 64 is the maximum that would make sense) |
-| 4    | Message type (cc/pc), channel |
+| 4    | Message type (cc/pc), channel. The left nybble denotes the message type (0x0 for cc, 0x1 for pc), and the right nybble denotes the channel (0x0 to 0xF). For example, 0x01 for pc on channel 1, 0x0A for cc on channel 10. |
 | 5    | Message number |
 | 6    | Message value (if needed, for cc message) |
+
 
 
 ## TRASH

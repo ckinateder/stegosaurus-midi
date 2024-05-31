@@ -26,6 +26,8 @@
 #define MFID_2 0x4d
 
 #define MODIFY_PRESET 0x0
+#define MODIFY_PRESET_LENGTH 6 // length of a modify preset message
+
 #define SAVE_TO_EEPROM 0x1
 
 // MIDIUSB Cable
@@ -44,7 +46,7 @@ MIDI_CREATE_INSTANCE(Adafruit_USBD_MIDI, USB_MIDI_Transport, MIDICoreUSB);
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, MIDICoreSerial);
 
 // bools
-bool echoUSBtoSerial = true;
+bool echoUSBtoSerial = true; // echo from usb to serial
 
 void setup()
 {
@@ -60,7 +62,7 @@ void setup()
   USBDevice.setManufacturerDescriptor     ("CJK Devices                     ");
   USBDevice.setProductDescriptor          ("Stegosaurus (PICO)              ");
   USB_MIDI_Transport.setStringDescriptor  ("Stegosaurus MIDI");
-  //USB_MIDI_Transport.setCableName         (1, "Controller");
+  //USB_MIDI_Transport.setCableName         (1, "Controller"); // set this if using multiple cable types
 
   // set handlers
   MIDICoreUSB.setHandleControlChange(onControlChange);
@@ -119,12 +121,16 @@ static void parseSysExMessage(byte *data, unsigned int length) {
   unsigned int start = 5;
   byte operation = leftNybble(*(data + start));
   byte saveToROM = rightNybble(*(data + start));
-  if(operation == MODIFY_PRESET){
+  int segmentLength = length - start;
 
+  if(operation == MODIFY_PRESET && segmentLength == MODIFY_PRESET_LENGTH){
+    
   }
   else {
-    Serial.print(F("Unsupported operation: "));
-    Serial.println(operation, HEX);
+    Serial.print(F("Unsupported operation for segment length: "));
+    Serial.print(operation, HEX);
+    Serial.print(F(", length "));
+    Serial.println(segmentLength);
   }
 }
 

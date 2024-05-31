@@ -2347,7 +2347,7 @@
 		(uuid "21de496b-5bd0-4e35-97c0-e0ca5f446028")
 	)
 	(no_connect
-		(at 34.29 44.45)
+		(at 34.29 39.37)
 		(uuid "21e16861-e7c4-4c98-8dc8-053fee9f56b2")
 	)
 	(no_connect
@@ -2544,6 +2544,16 @@
 	)
 	(wire
 		(pts
+			(xy 41.91 34.29) (xy 57.15 34.29)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6ef410a8-bb1a-4756-8dc0-c5b10672f1ab")
+	)
+	(wire
+		(pts
 			(xy 224.79 60.96) (xy 223.52 60.96)
 		)
 		(stroke
@@ -2581,16 +2591,6 @@
 			(type default)
 		)
 		(uuid "82c3b456-f7d9-42f5-ae5b-949baa72932a")
-	)
-	(wire
-		(pts
-			(xy 41.91 34.29) (xy 57.15 34.29)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "83e23296-252e-4e8e-8779-76054e6e1ec1")
 	)
 	(wire
 		(pts
@@ -2694,16 +2694,6 @@
 	)
 	(wire
 		(pts
-			(xy 41.91 39.37) (xy 44.45 39.37)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "bc978a68-56a8-4302-851a-3c2f7ba1b4b3")
-	)
-	(wire
-		(pts
 			(xy 68.58 41.91) (xy 68.58 45.72)
 		)
 		(stroke
@@ -2754,6 +2744,16 @@
 	)
 	(wire
 		(pts
+			(xy 44.45 29.21) (xy 41.91 29.21)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c4e017a3-3518-4767-81bf-8a4fe17cfb31")
+	)
+	(wire
+		(pts
 			(xy 57.15 34.29) (xy 60.96 34.29)
 		)
 		(stroke
@@ -2774,7 +2774,7 @@
 	)
 	(wire
 		(pts
-			(xy 44.45 39.37) (xy 44.45 45.72)
+			(xy 44.45 29.21) (xy 44.45 40.64)
 		)
 		(stroke
 			(width 0)
@@ -2912,13 +2912,14 @@
 		)
 		(uuid "68f4c9e4-7e0a-4a4c-99f0-d91bfec004e8")
 	)
-	(text "3.3V is an input\n5V is an output\nVIN probably not used"
+	(text "3.3V is an input\n5V is an output\nVIN can be either (must be > 7V)\nGND is shared"
 		(exclude_from_sim no)
-		(at 251.968 63.5 0)
+		(at 241.046 61.976 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
+			(justify left)
 		)
 		(uuid "cf04dcdf-a84a-4b43-9a00-1f37e2db8156")
 	)
@@ -2944,7 +2945,7 @@
 	)
 	(text "9V"
 		(exclude_from_sim no)
-		(at 25.908 36.83 0)
+		(at 25.908 31.75 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2954,7 +2955,7 @@
 	)
 	(symbol
 		(lib_id "Connector:Barrel_Jack_MountingPin")
-		(at 34.29 36.83 0)
+		(at 34.29 31.75 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -2963,7 +2964,7 @@
 		(fields_autoplaced yes)
 		(uuid "02d5fc61-317d-4fb4-b8e4-3f8d9f104afd")
 		(property "Reference" "J4"
-			(at 34.29 27.94 0)
+			(at 34.29 22.86 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2971,7 +2972,7 @@
 			)
 		)
 		(property "Value" "Barrel_Jack_MountingPin"
-			(at 34.29 30.48 0)
+			(at 34.29 25.4 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2979,7 +2980,7 @@
 			)
 		)
 		(property "Footprint" "Connector_BarrelJack:BarrelJack_CUI_PJ-102AH_Horizontal"
-			(at 35.56 37.846 0)
+			(at 35.56 32.766 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2988,7 +2989,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 35.56 37.846 0)
+			(at 35.56 32.766 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2997,7 +2998,7 @@
 			)
 		)
 		(property "Description" "DC Barrel Jack with a mounting pin"
-			(at 34.29 36.83 0)
+			(at 34.29 31.75 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4010,7 +4011,7 @@
 	)
 	(symbol
 		(lib_id "power:GNDREF")
-		(at 44.45 45.72 0)
+		(at 44.45 40.64 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -4019,7 +4020,7 @@
 		(fields_autoplaced yes)
 		(uuid "de4b47ae-b695-493c-b556-e340630b0ecd")
 		(property "Reference" "#PWR08"
-			(at 44.45 52.07 0)
+			(at 44.45 46.99 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4028,7 +4029,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 44.45 50.8 0)
+			(at 44.45 45.72 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4036,7 +4037,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 44.45 45.72 0)
+			(at 44.45 40.64 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4045,7 +4046,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 44.45 45.72 0)
+			(at 44.45 40.64 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4054,7 +4055,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GNDREF\" , reference supply ground"
-			(at 44.45 45.72 0)
+			(at 44.45 40.64 0)
 			(effects
 				(font
 					(size 1.27 1.27)
