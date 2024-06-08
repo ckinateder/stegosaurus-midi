@@ -40,30 +40,68 @@ This will have to use WebMIDI to communicate with the Arduino.
 
 A good first step for this is to get a list of MIDI devices. I want to do this in React.
 
-## Odds and Ends
+## Interface for Programming
 
 See [this page](https://learn.sparkfun.com/tutorials/midi-tutorial/advanced-messages) for a good reference on MIDI messages.
 
+The Stegosaurus will use SysEx messages to change the behavior of the controller. 
+
 The manufacturer ID for the USB MIDI SysEx messages is `0x00 0x53 0x4D`. The `0x00` indicates that the message has a vendor ID, and the `0x53 0x4D` is the ASCII representation of "SM". This is a unique identifier for the Stegosaurus MIDI controller (I think it is unique). So, if you see a message with this ID, it is likely from the Stegosaurus. The rest of the message is the actual data.
 
-To program the controller behavior, the interface will send a SysEx message with the manufacturer ID, followed by the command byte, and then the data. Keep in mind that the SysEx message maximum length is 128 bytes. This is changable [here](https://github.com/FortySevenEffects/arduino_midi_library/wiki/Using-custom-Settings), but I don't think that any of the messages will be even close to that length.
+To program the controller behavior, the interface will send a SysEx message with the manufacturer ID, followed by the command byte, and then the data. Keep in mind that the SysEx message maximum length is 128 bytes. This is using this [here](https://github.com/FortySevenEffects/arduino_midi_library/wiki/Using-custom-Settings), but I don't think that any of the messages will be even close to that length.
 
 ## MIDI Messages
 
-This SysEx message will be used to change the behavior of the controller. 
+The Stegosaurus will use the following MIDI messages. Keep in mind that the first 4 bytes of the message are specific to the SysEx MIDI protocol. The rest of the message is the actual data.
 
-### Changing Preset Behavior
- 
-| Byte | Value                                                                 |
+### Message Structure
+
+The message is broken up into 3 parts: the header, bookkeeping, and the actual data. The header is the first 4 bytes of the message, and is used to identify the message as a SysEx message from the Stegosaurus. The bookkeeping is the next 6 bytes, and is used to identify the type of message and the preset to modify. The actual data is the rest of the message, and is used to specify the behavior of the controller.
+
+#### Header
+
+| Byte | Value                                                            |
 |------|----------------------------------------------------------------------|
-| 0    | Left nybble denotes the operation. 0x0 for modify preset operation. Right nybble denotes whether or not to save to EEPROM or not. 0x0 for no, 0x1 for yes. For example, 0x01 for modify preset and write to EEPROM; 0x00 for modify preset but not write to EEPROM (probably just for debugging). |
-| 1    | Preset (allow up to 0-127)  |
-| 2    | This denotes on which event to send the message. The left nybble denotes the event, and the right nybble denotes the switch number. 0x0 for on preset entry, 0x1 for on preset exit, 0x2 for on switch press. The right nybble is the switch number (0x0 to 0x3), only if the left nybble is 0x2. For example, 0x10 for preset exit, 0x21 for switch 1 press. |
-| 3    | Storage location for preset (1 byte would allow 256 different locations per byte, but that’s too many - I think up to 64 is the maximum that would make sense) |
-| 4    | Message type (cc/pc), channel. The left nybble denotes the message type (0x0 for cc, 0x1 for pc), and the right nybble denotes the channel (0x0 to 0xF). For example, 0x01 for pc on channel 1, 0x0A for cc on channel 10. |
-| 5    | Message number |
-| 6    | Message value (if needed, for cc message) |
+| 0 | 0xF0 (SysEx start) |
+| 1 | 0x00 (Three-byte Vendor ID) |
+| 2 | 0x53 (Vendor ID) |
+| 3 | 0x4D (Vendor ID) |
 
+#### Bookkeeping
+
+| Byte | Description    | Range |
+|------|----------------|-------|
+| 4    | Whether or not to save to persistent memory |  0x00 = no, 0x01 = yes |
+| 5    | Trigger  |  0x00 for preset entry, 0x01 for switch short press, 0x02 for switch long press |
+| 6    | Switch number (if trigger is 0x01 or 0x02) | [0, 3] |
+| 7    | Switch type (if trigger is 0x01 or 0x02) | 0x0 for momentary, 0x1 for toggle |
+| 8    | Preset to modify | [0, 127] |
+| 9    | Operation | 0x00 for program change (PC), 0x01 for control change (CC), 0x0F for firmware parameter change |
+
+#### Data
+
+The data is the rest of the message, and is specific to the operation. 
+
+**Program Change**
+
+Program change messages are called when bit 9 of the bookkeeping byte is set to 0x00. 
+
+| Byte | Description    | Range |
+|------|----------------|-------|
+| 10   | MIDI channel   | [0, 15] |
+| 11   | Program number | [0, 127] |
+
+**Control Change**
+
+Control change messages are called when bit 9 of the bookkeeping byte is set to 0x01. 
+
+| Byte | Description    | Range |
+|------|----------------|-------|
+| 10   | MIDI channel   | [0, 15] |
+| 11   | Control number | [0, 127] |
+| 12   | Control value  | [0, 127] |
+
+**Firmware Parameter Change**
 
 
 ## TRASH

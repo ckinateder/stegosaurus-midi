@@ -18,6 +18,7 @@
 #include <Arduino.h>
 #include <Adafruit_TinyUSB.h>
 #include <MIDI.h>
+#include <EasyButton.h>
 
 #define LED_PIN 13
 #define VSN "0.1.0"
@@ -59,8 +60,8 @@ void setup()
   #endif
 
   // set names
-  USBDevice.setManufacturerDescriptor     ("CJK Devices                     ");
-  USBDevice.setProductDescriptor          ("Stegosaurus (PICO)              ");
+  USBDevice.setManufacturerDescriptor     ("CJK Devices");
+  USBDevice.setProductDescriptor          ("Stegosaurus (PICO)");
   USB_MIDI_Transport.setStringDescriptor  ("Stegosaurus MIDI");
   //USB_MIDI_Transport.setCableName         (1, "Controller"); // set this if using multiple cable types
 
