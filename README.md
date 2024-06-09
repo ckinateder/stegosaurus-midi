@@ -2,6 +2,12 @@
 
 Stegoaurus is an open-source MIDI controller. The controller is built around the Arduino framework and uses the MIDI protocol to communicate with a computer. It is designed to be easily configurable, with the ability to change the behavior of the controller using SysEx messages. 
 
+TODO:
+- [x] Add hardware MIDI support to the Pico
+- [ ] Start using the linker instead of the Arduino IDE
+- [ ] Add SysEx support to the Pico
+- [ ] EEPROM module
+- [ ] Pinouts
 ## Project Structure
 
 THis project is organized as follows:
@@ -13,9 +19,7 @@ THis project is organized as follows:
 
 ### Firmware
 
-#### Raspberry Pi Pico
-
-This is currently being switched over to work with the Raspberry Pi Pico.
+This project runs on the **Raspberry Pi Pico**.
 To set it up in the Arduino IDE, follow [this guide](https://randomnerdtutorials.com/programming-raspberry-pi-pico-w-arduino-ide/). You will probably have to hold down the BOOTSEL button while plugging in the Pico to get it into bootloader mode for the first time. Pay attention to these upload settings:
 
 ![upload settings](img/settings.png).
@@ -27,12 +31,9 @@ Required libraries:
 - [EasyButton](https://github.com/evert-arias/EasyButton) (@v2.0.3)
 - [Adafruit TinyUSB](https://github.com/adafruit/Adafruit_TinyUSB_Arduino) (@v3.1.4)
 
-[This link](https://electronics.stackexchange.com/questions/623026/problem-working-with-midi-on-hardware-serial-port-on-raspberry-pi-pico-2040) should help with hardware midi on the Pico.
+### Pinouts
 
-TODO:
-- [ ] Add hardware MIDI support to the Pico
-- [ ] Start using the linker instead of the Arduino IDE
-- [ ] Add SysEx support to the Pico
+
 
 ### Interface
 
@@ -56,7 +57,12 @@ The Stegosaurus will use the following MIDI messages. Keep in mind that the firs
 
 ### Message Structure
 
-The message is broken up into 3 parts: the header, bookkeeping, and the actual data. The header is the first 4 bytes of the message, and is used to identify the message as a SysEx message from the Stegosaurus. The bookkeeping is the next 6 bytes, and is used to identify the type of message and the preset to modify. The actual data is the rest of the message, and is used to specify the behavior of the controller.
+The message is broken up into 2 parts: the header and the data. The header is the first 4 bytes of the message, and the data is the rest of the message.
+
+Types of messages:
+- Control change
+- Program change
+- Variable set
 
 #### Header
 
@@ -67,41 +73,53 @@ The message is broken up into 3 parts: the header, bookkeeping, and the actual d
 | 2 | 0x53 (Vendor ID) |
 | 3 | 0x4D (Vendor ID) |
 
-#### Bookkeeping
+#### Program Change
 
 | Byte | Description    | Range |
 |------|----------------|-------|
-| 4    | Whether or not to save to persistent memory |  0x00 = no, 0x01 = yes |
+| 4    | Message type | 0x01 (Program Change) |
 | 5    | Trigger  |  0x00 for preset entry, 0x01 for switch short press, 0x02 for switch long press |
 | 6    | Switch number (if trigger is 0x01 or 0x02) | [0, 3] |
 | 7    | Switch type (if trigger is 0x01 or 0x02) | 0x0 for momentary, 0x1 for toggle |
 | 8    | Preset to modify | [0, 127] |
-| 9    | Operation | 0x00 for program change (PC), 0x01 for control change (CC), 0x0F for firmware parameter change |
+| 9    | MIDI channel   | [0, 15] |
+| 10   | Program number | [0, 127] |
 
-#### Data
-
-The data is the rest of the message, and is specific to the operation. 
-
-**Program Change**
-
-Program change messages are called when bit 9 of the bookkeeping byte is set to 0x00. 
-
-| Byte | Description    | Range |
-|------|----------------|-------|
-| 10   | MIDI channel   | [0, 15] |
-| 11   | Program number | [0, 127] |
-
-**Control Change**
+#### Control Change
 
 Control change messages are called when bit 9 of the bookkeeping byte is set to 0x01. 
 
 | Byte | Description    | Range |
 |------|----------------|-------|
-| 10   | MIDI channel   | [0, 15] |
-| 11   | Control number | [0, 127] |
-| 12   | Control value  | [0, 127] |
+| 4    | Message type | 0x01 (Control Change) |
+| 5    | Trigger  |  0x00 for preset entry, 0x01 for switch short press, 0x02 for switch long press |
+| 6    | Switch number (if trigger is 0x01 or 0x02) | [0, 3] |
+| 7    | Switch type (if trigger is 0x01 or 0x02) | 0x0 for momentary, 0x1 for toggle |
+| 8    | Preset to modify | [0, 127] |
+| 9    | MIDI channel   | [0, 15] |
+| 10   | Control number | [0, 127] |
+| 11   | Control value  | [0, 127] |
 
-**Firmware Parameter Change**
+#### Variable Set
+
+This message is used to set a variable in the controller. This is useful for setting things like the LED brightness or the MIDI channel.
+By convention, for boolean variables, a value of 0 is false and a value of 127 is true. This is done because the MIDI protocol for CC and PC messages only allows for values between 0 and 127.
+
+| Byte | Description    | Range |
+|------|----------------|-------|
+| 4    | Message type | 0x02 (Variable Set) |
+| 5    | Variable name | [] |
+| 6    | Value | [0, 127] |
+
+**Table of variable names and value ranges**
+
+| Variable # | Variable Name | Value Range |
+|------------|---------------|-------------|
+| 0x00       | LED Brightness | [0, 127] |
+| 0x01       | MIDI Channel | [0, 15] |
+
+
+## Pico Notes
 
 
 ## TRASH

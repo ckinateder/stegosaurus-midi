@@ -76,6 +76,8 @@ void setup()
 
   // echo all USB messages to devices on the serial
   MIDICoreUSB.setHandleMessage(onMessageUSB);
+  MIDICoreSerial.setHandleControlChange(onControlChange);
+  MIDICoreSerial.setHandleProgramChange(onProgramChange);
 
   pinMode(LED_BUILTIN, OUTPUT);
   // wait until device mounted
