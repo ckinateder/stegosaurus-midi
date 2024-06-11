@@ -77,7 +77,7 @@ Types of messages:
 
 | Byte | Description    | Range |
 |------|----------------|-------|
-| 4    | Message type | 0x01 (Program Change) |
+| 4    | Message type | 0x00 (Program Change) |
 | 5    | Trigger  |  0x00 for preset entry, 0x01 for switch short press, 0x02 for switch long press |
 | 6    | Switch number (if trigger is 0x01 or 0x02) | [0, 3] |
 | 7    | Switch type (if trigger is 0x01 or 0x02) | 0x0 for momentary, 0x1 for toggle |
