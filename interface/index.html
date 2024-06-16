@@ -1,14 +1,22 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>My Page</title>
-  </head>
-  <body>
-    <input type="text" id="myTextBox" />
-    <button id="myButton">Click Me</button>
 
-    <script>
-      // Your JavaScript code can go here
-    </script>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Stegosaurus Editor</title>
+  </head>
+
+  <body>
+    <h1>Stegosaurus Editor</h1>
+    <div id="select-div">
+      <label for="select-device">Select a MIDI device:</label>
+      <select id="select-device"></select>
+    </div>
+    <div
+      id="monitor"
+      style="border: 1px solid black; max-width: 600px; padding: 5px"
+    ></div>
   </body>
+  <script src="https://cdn.jsdelivr.net/npm/webmidi@latest/dist/iife/webmidi.iife.js"></script>
+  <script src="main.js"></script>
 </html>

@@ -53,7 +53,7 @@ To program the controller behavior, the interface will send a SysEx message with
 
 ## MIDI Messages
 
-The Stegosaurus will use the following MIDI messages. Keep in mind that the first 4 bytes of the message are specific to the SysEx MIDI protocol. The rest of the message is the actual data.
+The Stegosaurus will use the following MIDI messages. Keep in mind that the first 4 bytes of the message are specific to the SysEx MIDI protocol. The rest of the message is the actual data. Every message is concluded with the SysEx end byte `0xF7`.
 
 ### Message Structure
 
@@ -100,14 +100,26 @@ Control change messages are called when bit 9 of the bookkeeping byte is set to 
 | 10   | Control number | [0, 127] |
 | 11   | Control value  | [0, 127] |
 
-#### Variable Set
+#### Program Get
+
+This message is used to get the current information for a preset. This is useful for updating the interface with the current state of the controller.
+
+| Byte | Description    | Range |
+|------|----------------|-------|
+| 4    | Message type | 0x02 (Program Get) |
+| 5    | Preset to get | [0, 127] |
+
+The data returned will be in the following format:
+
+
+#### Variable Get/Set
 
 This message is used to set a variable in the controller. This is useful for setting things like the LED brightness or the MIDI channel.
 By convention, for boolean variables, a value of 0 is false and a value of 127 is true. This is done because the MIDI protocol for CC and PC messages only allows for values between 0 and 127.
 
 | Byte | Description    | Range |
 |------|----------------|-------|
-| 4    | Message type | 0x02 (Variable Set) |
+| 4    | Message type | 0x03 (Variable Set) / 0x04 (Variable Get) |
 | 5    | Variable name | [] |
 | 6    | Value | [0, 127] |
 
