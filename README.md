@@ -2,6 +2,8 @@
 
 # stegosaurus
 
+![schematic](img/schematic.png)
+
 Stegoaurus is an open-source MIDI controller. The controller is built around the Arduino framework and uses the MIDI protocol to communicate with a computer. It is designed to be easily configurable, with the ability to change the behavior of the controller using SysEx messages. 
 
 TODO:

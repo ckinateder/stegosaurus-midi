@@ -2964,7 +2964,7 @@
 	)
 	(text "3.3V is an input\n5V is an output\nVIN can be either (must be > 7V)\nGND is shared"
 		(exclude_from_sim no)
-		(at 221.996 83.058 0)
+		(at 157.48 83.82 0)
 		(effects
 			(font
 				(size 1.27 1.27)
