@@ -2,14 +2,15 @@
 
 # stegosaurus
 
-![schematic](img/schematic.png)
 
 Stegoaurus is an open-source MIDI controller. The controller is built around the Arduino framework and uses the MIDI protocol to communicate with a computer. It is designed to be easily configurable, with the ability to change the behavior of the controller using SysEx messages. 
 
 TODO:
 - [x] Add hardware MIDI support to the Pico
-- [ ] Start using the linker instead of the Arduino IDE
-- [ ] Add SysEx support to the Pico
+- [x] Add SysEx support to the Pico
+- [ ] Web interface for programming
+    - [x] Basic interaction
+    - [ ] Add SysEx messages
 - [ ] EEPROM module
 - [ ] Pinouts
 ## Project Structure
@@ -22,6 +23,8 @@ THis project is organized as follows:
 ## Requirements
 
 ### Firmware
+
+![schematic](img/schematic.png)
 
 This project runs on the **Raspberry Pi Pico**.
 To set it up in the Arduino IDE, follow [this guide](https://randomnerdtutorials.com/programming-raspberry-pi-pico-w-arduino-ide/). You will probably have to hold down the BOOTSEL button while plugging in the Pico to get it into bootloader mode for the first time. Pay attention to these upload settings:
@@ -36,8 +39,6 @@ Required libraries:
 - [Adafruit TinyUSB](https://github.com/adafruit/Adafruit_TinyUSB_Arduino) (@v3.1.4)
 
 ### Pinouts
-
-
 
 ### Interface
 
