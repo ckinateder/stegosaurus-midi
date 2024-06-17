@@ -22,17 +22,16 @@
 
 #define LED_PIN 13
 #define VSN "0.1.0"
-
 #define MFID_1 0x53
 #define MFID_2 0x4d
-
 #define MODIFY_PRESET 0x0
 #define MODIFY_PRESET_LENGTH 6 // length of a modify preset message
-
 #define SAVE_TO_EEPROM 0x1
-
-// MIDIUSB Cable
 #define MIDICoreUSB_Cable 0 // this corresponds to the virtual "port" or "cable". stick to 0.
+
+// bools
+bool echoUSBtoSerial = true; // echo from usb to serial
+bool midiThru = true; // passthrough serial
 
 // make a type for all messages
 using namespace MIDI_NAMESPACE;
@@ -46,8 +45,6 @@ Adafruit_USBD_MIDI USB_MIDI_Transport(1);
 MIDI_CREATE_INSTANCE(Adafruit_USBD_MIDI, USB_MIDI_Transport, MIDICoreUSB);
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, MIDICoreSerial);
 
-// bools
-bool echoUSBtoSerial = true; // echo from usb to serial
 
 void setup()
 {
@@ -151,6 +148,12 @@ static void onMessageUSB(const MidiMessage& message) {
     MIDICoreSerial.send(message);
 }
 
+// send midi thru
+static void onMessageSerial(const MidiMessage& message) {
+  if(midiThru)
+    MIDICoreSerial.send(message);
+}
+
 bool checkVendor(const byte *data, unsigned int size) {
   if(size < 5) // if not long enough to contain the needed bytes, then it doesn't match
     return false;
@@ -183,7 +186,6 @@ void flashLed(){
   delay(100);
   digitalWrite(LED_PIN, LOW);
 }
-
 
 byte leftNybble(const byte b){
   return b >> 4;

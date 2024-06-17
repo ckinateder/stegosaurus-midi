@@ -122,7 +122,7 @@ By convention, for boolean variables, a value of 0 is false and a value of 127 i
 | Byte | Description    | Range |
 |------|----------------|-------|
 | 4    | Message type | 0x03 (Variable Set) / 0x04 (Variable Get) |
-| 5    | Variable name | [] |
+| 5    | Variable name | [0, ] |
 | 6    | Value | [0, 127] |
 
 **Table of variable names and value ranges**
@@ -131,6 +131,7 @@ By convention, for boolean variables, a value of 0 is false and a value of 127 i
 |------------|---------------|-------------|
 | 0x00       | LED Brightness | [0, 127] |
 | 0x01       | MIDI Channel | [0, 15] |
+| 0x02       | MIDI Thru | [0, 127] |
 
 
 ## Pico Notes
