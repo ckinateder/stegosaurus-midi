@@ -60,6 +60,9 @@ To program the controller behavior, the interface will send a SysEx message with
 
 The Stegosaurus will use the following MIDI messages. Keep in mind that the first 4 bytes of the message are specific to the SysEx MIDI protocol. The rest of the message is the actual data. Every message is concluded with the SysEx end byte `0xF7`.
 
+### Memory Layout
+There are 128 presets, each with 16 slots.
+
 ### Message Structure
 
 The message is broken up into 2 parts: the header and the data. The header is the first 4 bytes of the message, and the data is the rest of the message.
@@ -67,7 +70,15 @@ The message is broken up into 2 parts: the header and the data. The header is th
 Types of messages:
 - Control change
 - Program change
+- Program get
 - Variable set
+
+**IMPORTANT**: 
+| Saved to main memory |
+|-----------------------|
+| Control change        |
+| Program change        |
+
 
 #### Header
 
@@ -83,11 +94,11 @@ Types of messages:
 | Byte | Description    | Range |
 |------|----------------|-------|
 | 4    | Message type | 0x00 (Program Change) |
-| 5    | Trigger  |  0x00 for preset entry, 0x01 for switch short press, 0x02 for switch long press |
-| 6    | Switch number (if trigger is 0x01 or 0x02) | [0, 3] |
-| 7    | Switch type (if trigger is 0x01 or 0x02) | 0x0 for momentary, 0x1 for toggle |
-| 8    | Preset to modify | [0, 127] |
-| 9    | MIDI channel   | [0, 15] |
+| 5    | Preset to modify | [0, 127] |
+| 6    | Slot to modify | [0, 16] |
+| 7    | Trigger  |  0x00 for preset entry, 0x01 for preset exit, 0x02 for switch short press, 0x03 for switch long press |
+| 8    | Switch number and type (if trigger is 0x01 or 0x02). The left nybble is the switch number [0, 16], and the right nybble is the type (0x0 for momentary, 0x1 for toggle) | [0, 256] |
+| 9   | MIDI channel   | [0, 15] |
 | 10   | Program number | [0, 127] |
 
 #### Control Change
@@ -97,13 +108,13 @@ Control change messages are called when bit 9 of the bookkeeping byte is set to 
 | Byte | Description    | Range |
 |------|----------------|-------|
 | 4    | Message type | 0x01 (Control Change) |
-| 5    | Trigger  |  0x00 for preset entry, 0x01 for switch short press, 0x02 for switch long press |
-| 6    | Switch number (if trigger is 0x01 or 0x02) | [0, 3] |
-| 7    | Switch type (if trigger is 0x01 or 0x02) | 0x0 for momentary, 0x1 for toggle |
-| 8    | Preset to modify | [0, 127] |
-| 9    | MIDI channel   | [0, 15] |
+| 5    | Preset to modify | [0, 127] |
+| 6    | Slot to modify | [0, 16] |
+| 7    | Trigger  |  0x00 for preset entry, 0x01 for preset exit, 0x02 for switch short press, 0x03 for switch long press |
+| 8    | Switch number and type (if trigger is 0x01 or 0x02). The left nybble is the switch number [0, 16], and the right nybble is the type (0x0 for momentary, 0x1 for toggle) | [0, 256] |
+| 9   | MIDI channel   | [0, 15] |
 | 10   | Control number | [0, 127] |
-| 11   | Control value  | [0, 127] |
+| 11  | Control value  | [0, 127] |
 
 #### Program Get
 
@@ -130,11 +141,11 @@ By convention, for boolean variables, a value of 0 is false and a value of 127 i
 
 **Table of variable names and value ranges**
 
-| Variable # | Variable Name | Value Range |
-|------------|---------------|-------------|
-| 0x00       | LED Brightness | [0, 127] |
-| 0x01       | MIDI Channel | [0, 15] |
-| 0x02       | MIDI Thru | [0, 127] |
+| Variable # | Variable Name | Value Range | Description |
+|------------|---------------|-------------|-------------|
+| 0x00       | LED Brightness | [0, 127] | Brightness of the LEDs |
+| 0x01       | MIDI Channel | [0, 15] | MIDI channel for the controller |
+| 0x02       | MIDI Thru | [0, 127] | MIDI Thru setting |
 
 
 ## Pico Notes
