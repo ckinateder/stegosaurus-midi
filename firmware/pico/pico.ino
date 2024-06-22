@@ -13,8 +13,7 @@
 #define LED_PIN 13
 #define MFID_1 0x53
 #define MFID_2 0x4d
-#define MODIFY_PRESET 0x0
-#define MODIFY_PRESET_LENGTH 6 // length of a modify preset message
+#define SLOTS_PER_PRESET 16
 #define SAVE_TO_EEPROM 0x1
 #define MIDICoreUSB_Cable 0 // this corresponds to the virtual "port" or "cable". stick to 0.
 #define PULLUP true
@@ -27,7 +26,7 @@
 #define SWITCH_4_PIN 13
 
 // main storage
-byte MEMORY[128][16][6]; // 128 presets, 16 slots, 6 bytes each
+byte MEMORY[128][SLOTS_PER_PRESET][6]; // 128 presets, SLOTS_PER_PRESET slots, 6 bytes each
 byte CURRENT_PRESET = 0;
 
 // enums
@@ -48,7 +47,7 @@ enum Trigger
 enum SwitchType
 {
   Momentary = 0x0,
-  Toggle = 0x1,
+  Latch = 0x1,
 };
 
 // buttons
@@ -127,7 +126,8 @@ void setup()
   // ------------------- set up memory -------------------
   // set all memory to 0
   memset(MEMORY, 0, sizeof(MEMORY));
-  writeSlotToMemory(0, 0, Action::ProgramChange, Trigger::Entry, 0, SwitchType::Momentary, 0, 0, 0);
+  writeSlotToMemory(0, 0, Action::ControlChange, Trigger::Entry, 0, SwitchType::Latch, 0, 16, 127);
+  writeSlotToMemory(0, 1, Action::ProgramChange, Trigger::ShortPress, 1, SwitchType::Latch, 0, 17, 0);
 }
 
 void loop()
@@ -146,8 +146,8 @@ void loop()
 // -- button handlers --
 void buttonPressed()
 {
-  digitalWrite(LED_PIN, HIGH);  // LED flash
-  xprintf("Button  pressed\n");
+  digitalWrite(LED_PIN, HIGH); // LED flash
+  printPreset(CURRENT_PRESET);
 }
 
 // -- message handlers --
@@ -195,7 +195,7 @@ static void parseSysExMessage(byte *data, unsigned int length)
   byte saveToROM = rightNybble(*(data + start));
   int segmentLength = length - start;
 
-  if (operation == MODIFY_PRESET && segmentLength == MODIFY_PRESET_LENGTH)
+  if (false)
   {
   }
   else
@@ -257,13 +257,57 @@ void readSlotFromMemory(byte preset, byte slot, byte *msgType, byte *trigger, by
   *data1 = MEMORY[preset][slot][4];
   *data2 = MEMORY[preset][slot][5];
 }
-
 void printSlot(byte preset, byte slot)
 {
   byte msgType, trigger, switchNum, switchType, channel, data1, data2;
   readSlotFromMemory(preset, slot, &msgType, &trigger, &switchNum, &switchType, &channel, &data1, &data2);
   xprintf("Preset [%d][%d]: %d %d %d %d %d %d %d\n", preset, slot, msgType, trigger, switchNum, switchType, channel, data1, data2);
 }
+
+/*
+Read a preset from memory
+*/
+void readPresetFromMemory(byte preset, byte *data)
+{
+  for (int i = 0; i < SLOTS_PER_PRESET; i++)
+  {
+    for (int j = 0; j < 6; j++)
+    {
+      data[i * 6 + j] = MEMORY[preset][i][j];
+    }
+  }
+}
+
+/*
+Print preset from memory, omitting empty slots
+*/
+void printPreset(byte preset)
+{
+  xprintf("Preset %03d:", preset);
+  byte printed = 0;
+  byte data[SLOTS_PER_PRESET * 6];
+  readPresetFromMemory(preset, data);
+  for (int i = 0; i < SLOTS_PER_PRESET; i++)
+  {
+    // check if empty
+    byte empty[6] = {0, 0, 0, 0, 0, 0};
+    if (memcmp(data + i * 6, empty, 6) == 0)
+      continue;
+    else
+    {
+      xprintf("\n [%02d]: ", i);
+      printHexArray(data + i * 6, 6);
+      printed++;
+    }
+  }
+  if (printed == 0)
+    xprintf(" (empty)");
+  else
+    xprintf("\n %d/%d slots used", printed, SLOTS_PER_PRESET);
+
+  xprintf("\n");
+}
+
 // -- utility
 /*
 Take 8 bytes and convert them to a 64 bit integer for storage
