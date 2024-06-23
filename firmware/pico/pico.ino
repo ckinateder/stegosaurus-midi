@@ -30,24 +30,27 @@ byte MEMORY[128][SLOTS_PER_PRESET][6]; // 128 presets, SLOTS_PER_PRESET slots, 6
 byte CURRENT_PRESET = 0;
 
 // enums
+// NONE of these can be 0
 enum Action
 {
-  ControlChange = 0x00,
-  ProgramChange = 0x01,
-  PresetUp = 0x02,   // on stegosaurus
-  PresetDown = 0x03, // on stegosaurus
+  ControlChange = 0x01,
+  ProgramChange = 0x02,
+  PresetUp = 0x03,   // on stegosaurus
+  PresetDown = 0x04, // on stegosaurus
 };
 enum Trigger
 {
-  Entry = 0x00,
-  Exit = 0x01,
-  ShortPress = 0x02,
-  LongPress = 0x03,
+  EnterPreset = 0x01,
+  ExitPreset = 0x02,
+  ShortPress = 0x03,
+  LongPress = 0x04,
+  DoublePress = 0x05,
 };
 enum SwitchType
 {
-  Momentary = 0x0,
-  Latch = 0x1,
+  NA = 0x1,
+  Momentary = 0x2,
+  Latch = 0x3
 };
 
 // buttons
@@ -57,8 +60,7 @@ EasyButton button3(SWITCH_3_PIN, DEBOUNCE, PULLUP, true);
 EasyButton button4(SWITCH_4_PIN, DEBOUNCE, PULLUP, true);
 
 // bools
-bool echoUSBtoSerial = true; // echo from usb to serial
-bool midiThru = true;        // passthrough serial
+bool midiThru = true; // passthrough serial and usb midi
 
 // make a type for all messages
 using namespace MIDI_NAMESPACE;
@@ -126,10 +128,18 @@ void setup()
   // ------------------- set up memory -------------------
   // set all memory to 0
   memset(MEMORY, 0, sizeof(MEMORY));
-  writeSlotToMemory(0, 0, Action::ControlChange, Trigger::Entry, 0, SwitchType::Latch, 0, 16, 127);
-  writeSlotToMemory(0, 1, Action::ProgramChange, Trigger::ShortPress, 1, SwitchType::Latch, 0, 17, 0);
-}
 
+  // populate memory with some defaults
+  for (int i = 0; i < 128; i++)
+  {
+    writeSlotToMemory(i, 0, Action::ControlChange, Trigger::EnterPreset, 0, SwitchType::Latch, 0, randomByte(0, 127), 127);
+    writeSlotToMemory(i, 1, Action::ProgramChange, Trigger::ShortPress, 1, SwitchType::Latch, 0, 17, 0);
+    writeSlotToMemory(i, 2, Action::ControlChange, Trigger::EnterPreset, 0, SwitchType::NA, 0, 18, randomByte(0, 127));
+    writeSlotToMemory(i, 3, Action::ProgramChange, Trigger::ExitPreset, 0, SwitchType::NA, 0, 18, 0);
+  }
+  loadPreset(0);
+}
+byte pres = 0;
 void loop()
 {
   // -- listen and read
@@ -141,6 +151,15 @@ void loop()
   button2.read();
   button3.read();
   button4.read();
+
+  /*
+  delay(1500);
+  loadPreset(pres);
+
+  pres++;
+  if (pres >= 127)
+    pres = 0;
+  */
 }
 
 // -- button handlers --
@@ -148,63 +167,6 @@ void buttonPressed()
 {
   digitalWrite(LED_PIN, HIGH); // LED flash
   printPreset(CURRENT_PRESET);
-}
-
-// -- message handlers --
-bool checkVendor(const byte *data, unsigned int size)
-{
-  if (size < 5) // if not long enough to contain the needed bytes, then it doesn't match
-    return false;
-  return (*(data + 1) == 0x00 && *(data + 2) == MFID_1 && *(data + 3) == MFID_2);
-}
-
-static void onSystemExclusive(byte *data, unsigned int length)
-{
-  // check last byte in msg - if it is F0, then more is coming
-  // if it is F7, it is the last
-  byte lastBit = *(data + length - 1); // last byte in data
-
-  // assign last bit
-  bool last = false;
-  if (lastBit == 0xF7)
-    last = true;
-
-  // print
-  xprintf("SysEx Message (%dB): ", length);
-  printHexArray(data, length);
-  if (last)
-  {
-    Serial.println(F(" (end)"));
-  }
-  else
-  {
-    Serial.println(F(" (tbc)"));
-  }
-
-  // exit if not last bit
-  if (last && checkVendor(data, length))
-    parseSysExMessage(data, length);
-  else
-    Serial.println(F("Unexplained issue! The SysEx message is not getting processed"));
-}
-
-static void parseSysExMessage(byte *data, unsigned int length)
-{
-  unsigned int start = 5;
-  byte operation = leftNybble(*(data + start));
-  byte saveToROM = rightNybble(*(data + start));
-  int segmentLength = length - start;
-
-  if (false)
-  {
-  }
-  else
-  {
-    Serial.print(F("Unsupported operation for segment length: "));
-    Serial.print(operation, HEX);
-    Serial.print(F(", length "));
-    Serial.println(segmentLength);
-  }
 }
 
 static void onControlChange(byte channel, byte number, byte value)
@@ -220,15 +182,33 @@ static void onProgramChange(byte channel, byte number)
 // echo all messages over usb
 static void onMessageUSB(const MidiMessage &message)
 {
-  if (echoUSBtoSerial)
+  // xprintf("USB: ");
+  // printHexArray(message, message.length);
+  if (midiThru)
     MIDICoreSerial.send(message);
 }
 
 // send midi thru
 static void onMessageSerial(const MidiMessage &message)
 {
+  // xprintf("Serial: ");
+  // printHexArray(message.data(), message.length());
   if (midiThru)
     MIDICoreSerial.send(message);
+}
+
+static void sendControlChange(byte channel, byte number, byte value)
+{
+  xprintf("Sending ControlChange: CH %d, CC %d, VAL %d\n", channel, number, value);
+  MIDICoreUSB.sendControlChange(channel, number, value);
+  MIDICoreSerial.sendControlChange(channel, number, value);
+}
+
+static void sendProgramChange(byte channel, byte number)
+{
+  xprintf("Sending ProgramChange: CH %d, PC %d\n", channel, number);
+  MIDICoreUSB.sendProgramChange(channel, number);
+  MIDICoreSerial.sendProgramChange(channel, number);
 }
 
 // -- message creation
@@ -265,6 +245,25 @@ void printSlot(byte preset, byte slot)
 }
 
 /*
+Route to the correct action
+*/
+void action(byte msgType, byte channel, byte data1, byte data2)
+{
+  // apply action
+  switch (msgType)
+  {
+  case Action::ControlChange:
+    sendControlChange(channel, data1, data2);
+    break;
+  case Action::ProgramChange:
+    sendProgramChange(channel, data1);
+    break;
+  default:
+    break;
+  }
+}
+
+/*
 Read a preset from memory
 */
 void readPresetFromMemory(byte preset, byte *data)
@@ -275,6 +274,51 @@ void readPresetFromMemory(byte preset, byte *data)
     {
       data[i * 6 + j] = MEMORY[preset][i][j];
     }
+  }
+}
+
+/*
+Load preset from memory and apply required EnterPreset and ExitPreset actions
+*/
+void loadPreset(byte preset)
+{
+
+  xprintf("Leaving preset %d\n", CURRENT_PRESET);
+
+  // apply ExitPreset actions from CURRENT_PRESET
+  for (int i = 0; i < SLOTS_PER_PRESET; i++)
+  {
+    byte msgType, trigger, switchNum, switchType, channel, data1, data2;
+    readSlotFromMemory(CURRENT_PRESET, i, &msgType, &trigger, &switchNum, &switchType, &channel, &data1, &data2);
+    if (trigger == Trigger::ExitPreset)
+
+      action(msgType, channel, data1, data2);
+  }
+
+  CURRENT_PRESET = preset;
+  xprintf("Loading preset %d\n", preset);
+
+  // apply EnterPreset actions from CURRENT_PRESET
+  for (int i = 0; i < SLOTS_PER_PRESET; i++)
+  {
+    byte msgType, trigger, switchNum, switchType, channel, data1, data2;
+    readSlotFromMemory(CURRENT_PRESET, i, &msgType, &trigger, &switchNum, &switchType, &channel, &data1, &data2);
+    if (trigger == Trigger::EnterPreset)
+      action(msgType, channel, data1, data2);
+  }
+}
+
+/*
+Using CURRENT_PRESET, execute the action for the switchNum
+*/
+void executeSwitchAction(Trigger trigger, byte switchNum)
+{
+  for (int i = 0; i < SLOTS_PER_PRESET; i++)
+  {
+    byte msgType, slotTrigger, slotSwitchNum, switchType, channel, data1, data2;
+    readSlotFromMemory(CURRENT_PRESET, i, &msgType, &slotTrigger, &slotSwitchNum, &switchType, &channel, &data1, &data2);
+    if (slotTrigger == trigger && slotSwitchNum == switchNum)
+      action(msgType, channel, data1, data2);
   }
 }
 
@@ -388,4 +432,68 @@ byte leftNybble(const byte b)
 byte rightNybble(const byte b)
 {
   return b & 0x0F;
+}
+
+byte randomByte(byte min, byte max)
+{
+  return random(min, max + 1);
+}
+
+// sysex
+// -- message handlers --
+bool checkVendor(const byte *data, unsigned int size)
+{
+  if (size < 5) // if not long enough to contain the needed bytes, then it doesn't match
+    return false;
+  return (*(data + 1) == 0x00 && *(data + 2) == MFID_1 && *(data + 3) == MFID_2);
+}
+
+static void onSystemExclusive(byte *data, unsigned int length)
+{
+  // check last byte in msg - if it is F0, then more is coming
+  // if it is F7, it is the last
+  byte lastBit = *(data + length - 1); // last byte in data
+
+  // assign last bit
+  bool last = false;
+  if (lastBit == 0xF7)
+    last = true;
+
+  // print
+  xprintf("SysEx Message (%dB): ", length);
+  printHexArray(data, length);
+  if (last)
+  {
+    Serial.println(F(" (end)"));
+  }
+  else
+  {
+    Serial.println(F(" (tbc)"));
+  }
+
+  // ExitPreset if not last bit
+  if (last && checkVendor(data, length))
+    parseSysExMessage(data, length);
+  else
+    Serial.println(F("Unexplained issue! The SysEx message is not getting processed"));
+}
+
+static void parseSysExMessage(byte *data, unsigned int length)
+{
+  unsigned int start = 5;
+  byte operation = leftNybble(*(data + start));
+  byte saveToROM = rightNybble(*(data + start));
+  int segmentLength = length - start;
+  /*
+  if (false)
+  {
+  }
+  else
+  {
+    Serial.print(F("Unsupported operation for segment length: "));
+    Serial.print(operation, HEX);
+    Serial.print(F(", length "));
+    Serial.println(segmentLength);
+  }
+  */
 }
