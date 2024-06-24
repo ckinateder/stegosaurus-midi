@@ -14,6 +14,7 @@
 #define MFID_1 0x53
 #define MFID_2 0x4d
 #define SLOTS_PER_PRESET 16
+#define NUM_PRESETS 128
 #define SAVE_TO_EEPROM 0x1
 #define MIDICoreUSB_Cable 0 // this corresponds to the virtual "port" or "cable". stick to 0.
 #define PULLUP true
@@ -26,7 +27,7 @@
 #define SWITCH_4_PIN 13
 
 // main storage
-byte MEMORY[128][SLOTS_PER_PRESET][6]; // 128 presets, SLOTS_PER_PRESET slots, 6 bytes each
+byte MEMORY[NUM_PRESETS][SLOTS_PER_PRESET][6]; // NUM_PRESETS presets, SLOTS_PER_PRESET slots, 6 bytes each
 byte CURRENT_PRESET = 0;
 
 // enums
@@ -53,11 +54,11 @@ enum SwitchType
   Latch = 0x3
 };
 
-// buttons
-EasyButton button1(SWITCH_1_PIN, DEBOUNCE, PULLUP, true);
-EasyButton button2(SWITCH_2_PIN, DEBOUNCE, PULLUP, true);
-EasyButton button3(SWITCH_3_PIN, DEBOUNCE, PULLUP, true);
-EasyButton button4(SWITCH_4_PIN, DEBOUNCE, PULLUP, true);
+// switchs
+EasyButton switch1(SWITCH_1_PIN, DEBOUNCE, PULLUP, true);
+EasyButton switch2(SWITCH_2_PIN, DEBOUNCE, PULLUP, true);
+EasyButton switch3(SWITCH_3_PIN, DEBOUNCE, PULLUP, true);
+EasyButton switch4(SWITCH_4_PIN, DEBOUNCE, PULLUP, true);
 
 // bools
 bool midiThru = true; // passthrough serial and usb midi
@@ -104,6 +105,7 @@ void setup()
 
   // echo all USB messages to devices on the serial
   MIDICoreUSB.setHandleMessage(onMessageUSB);
+  MIDICoreSerial.setHandleMessage(onMessageSerial);
 
   // set to receieve all channels - in configuration, filter them out
   MIDICoreUSB.begin(MIDI_CHANNEL_OMNI);
@@ -113,31 +115,32 @@ void setup()
   while (!TinyUSBDevice.mounted())
     delay(1);
 
-  // ------------------- set up buttons -------------------
-  button1.onPressedFor(SHORT_PRESS_DURATION, buttonPressed);
-  button2.onPressedFor(SHORT_PRESS_DURATION, buttonPressed);
-  button3.onPressedFor(SHORT_PRESS_DURATION, buttonPressed);
-  button4.onPressedFor(SHORT_PRESS_DURATION, buttonPressed);
+  // ------------------- set up switchs -------------------
+  switch1.onPressedFor(SHORT_PRESS_DURATION, switch1Pressed);
+  switch2.onPressedFor(SHORT_PRESS_DURATION, switch2Pressed);
+  switch3.onPressedFor(SHORT_PRESS_DURATION, switch3Pressed);
+  switch4.onPressedFor(SHORT_PRESS_DURATION, switch4Pressed);
 
-  // begin buttons
-  button1.begin();
-  button2.begin();
-  button3.begin();
-  button4.begin();
+  // begin switchs
+  switch1.begin();
+  switch2.begin();
+  switch3.begin();
+  switch4.begin();
 
   // ------------------- set up memory -------------------
   // set all memory to 0
   memset(MEMORY, 0, sizeof(MEMORY));
 
   // populate memory with some defaults
-  for (int i = 0; i < 128; i++)
+  for (int i = 0; i < NUM_PRESETS; i++)
   {
-    writeSlotToMemory(i, 0, Action::ControlChange, Trigger::EnterPreset, 0, SwitchType::Latch, 0, randomByte(0, 127), 127);
-    writeSlotToMemory(i, 1, Action::ProgramChange, Trigger::ShortPress, 1, SwitchType::Latch, 0, 17, 0);
-    writeSlotToMemory(i, 2, Action::ControlChange, Trigger::EnterPreset, 0, SwitchType::NA, 0, 18, randomByte(0, 127));
-    writeSlotToMemory(i, 3, Action::ProgramChange, Trigger::ExitPreset, 0, SwitchType::NA, 0, 18, 0);
+    writeSlotToMemory(i, 0, Action::PresetDown, Trigger::ShortPress, 0, SwitchType::Momentary, 0, 0, 0);      // stego preset
+    writeSlotToMemory(i, 1, Action::PresetUp, Trigger::ShortPress, 1, SwitchType::Momentary, 0, 0, 0);        // stego preset
+    writeSlotToMemory(i, 2, Action::ProgramChange, Trigger::EnterPreset, 0, SwitchType::NA, 15, i, 0);        // hx preset
+    writeSlotToMemory(i, 3, Action::ControlChange, Trigger::ShortPress, 2, SwitchType::Momentary, 15, 69, 8); // hx snapshot down
+    writeSlotToMemory(i, 4, Action::ControlChange, Trigger::ShortPress, 3, SwitchType::Momentary, 15, 69, 9); // hx snapshot up
   }
-  loadPreset(0);
+  loadPreset(CURRENT_PRESET);
 }
 byte pres = 0;
 void loop()
@@ -146,11 +149,11 @@ void loop()
   MIDICoreUSB.read();
   MIDICoreSerial.read();
 
-  // -- any button logic can go here --
-  button1.read();
-  button2.read();
-  button3.read();
-  button4.read();
+  // -- any switch logic can go here --
+  switch1.read();
+  switch2.read();
+  switch3.read();
+  switch4.read();
 
   /*
   delay(1500);
@@ -162,11 +165,25 @@ void loop()
   */
 }
 
-// -- button handlers --
-void buttonPressed()
+// -- switch handlers --
+void switch1Pressed()
 {
-  digitalWrite(LED_PIN, HIGH); // LED flash
-  printPreset(CURRENT_PRESET);
+  executeSwitchAction(Trigger::ShortPress, 0);
+}
+
+void switch2Pressed()
+{
+  executeSwitchAction(Trigger::ShortPress, 1);
+}
+
+void switch3Pressed()
+{
+  executeSwitchAction(Trigger::ShortPress, 2);
+}
+
+void switch4Pressed()
+{
+  executeSwitchAction(Trigger::ShortPress, 3);
 }
 
 static void onControlChange(byte channel, byte number, byte value)
@@ -199,14 +216,14 @@ static void onMessageSerial(const MidiMessage &message)
 
 static void sendControlChange(byte channel, byte number, byte value)
 {
-  xprintf("Sending ControlChange: CH %d, CC %d, VAL %d\n", channel, number, value);
+  xprintf("OUT: ControlChange: CH %d, CC %d, VAL %d\n", channel, number, value);
   MIDICoreUSB.sendControlChange(channel, number, value);
   MIDICoreSerial.sendControlChange(channel, number, value);
 }
 
 static void sendProgramChange(byte channel, byte number)
 {
-  xprintf("Sending ProgramChange: CH %d, PC %d\n", channel, number);
+  xprintf("OUT: ProgramChange: CH %d, PC %d\n", channel, number);
   MIDICoreUSB.sendProgramChange(channel, number);
   MIDICoreSerial.sendProgramChange(channel, number);
 }
@@ -258,6 +275,12 @@ void action(byte msgType, byte channel, byte data1, byte data2)
   case Action::ProgramChange:
     sendProgramChange(channel, data1);
     break;
+  case Action::PresetUp:
+    loadPreset(CURRENT_PRESET + 1);
+    break;
+  case Action::PresetDown:
+    loadPreset(CURRENT_PRESET - 1);
+    break;
   default:
     break;
   }
@@ -282,6 +305,11 @@ Load preset from memory and apply required EnterPreset and ExitPreset actions
 */
 void loadPreset(byte preset)
 {
+  // check bounds
+  if (CURRENT_PRESET == 0 && preset >= NUM_PRESETS - 1)
+    preset = NUM_PRESETS - 1;
+  else if (preset >= NUM_PRESETS)
+    preset = 0;
 
   xprintf("Leaving preset %d\n", CURRENT_PRESET);
 
@@ -460,7 +488,7 @@ static void onSystemExclusive(byte *data, unsigned int length)
     last = true;
 
   // print
-  xprintf("SysEx Message (%dB): ", length);
+  xprintf("IN: SysEx (%d): ", length);
   printHexArray(data, length);
   if (last)
   {
@@ -474,6 +502,10 @@ static void onSystemExclusive(byte *data, unsigned int length)
   // ExitPreset if not last bit
   if (last && checkVendor(data, length))
     parseSysExMessage(data, length);
+  else if (!checkVendor(data, length))
+  {
+    // do nothing
+  }
   else
     Serial.println(F("Unexplained issue! The SysEx message is not getting processed"));
 }
