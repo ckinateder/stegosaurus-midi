@@ -25,6 +25,7 @@
 #define SWITCH_2_PIN 11
 #define SWITCH_3_PIN 12
 #define SWITCH_4_PIN 13
+#define EMPTY 0
 
 // main storage
 byte MEMORY[NUM_PRESETS][SLOTS_PER_PRESET][6]; // NUM_PRESETS presets, SLOTS_PER_PRESET slots, 6 bytes each
@@ -32,6 +33,11 @@ byte CURRENT_PRESET = 0;
 
 // enums
 // NONE of these can be 0
+
+/*
+  Action type
+  8 bits
+*/
 enum Action
 {
   ControlChange = 0x01,
@@ -39,19 +45,40 @@ enum Action
   PresetUp = 0x03,   // on stegosaurus
   PresetDown = 0x04, // on stegosaurus
 };
+
+/*
+  Trigger type
+  4 bits
+*/
 enum Trigger
 {
-  EnterPreset = 0x01,
-  ExitPreset = 0x02,
-  ShortPress = 0x03,
-  LongPress = 0x04,
-  DoublePress = 0x05,
+  EnterPreset = 0x1,
+  ExitPreset = 0x2,
+  ShortPress = 0x3,
+  LongPress = 0x4,
+  DoublePress = 0x5,
 };
+
+/*
+  Switch type
+  4 bits
+*/
 enum SwitchType
 {
-  NA = 0x1,
-  Momentary = 0x2,
-  Latch = 0x3
+  Momentary = 1,
+  Latch = 2,
+};
+
+/*
+  Switch number
+  4 bits
+*/
+enum Switch
+{
+  SW1 = 1,
+  SW2 = 2,
+  SW3 = 3,
+  SW4 = 4,
 };
 
 // switchs
@@ -129,16 +156,16 @@ void setup()
 
   // ------------------- set up memory -------------------
   // set all memory to 0
-  memset(MEMORY, 0, sizeof(MEMORY));
+  memset(MEMORY, EMPTY, sizeof(MEMORY));
 
   // populate memory with some defaults
   for (int i = 0; i < NUM_PRESETS; i++)
   {
-    writeSlotToMemory(i, 0, Action::PresetDown, Trigger::ShortPress, 0, SwitchType::Momentary, 0, 0, 0);      // stego preset
-    writeSlotToMemory(i, 1, Action::PresetUp, Trigger::ShortPress, 1, SwitchType::Momentary, 0, 0, 0);        // stego preset
-    writeSlotToMemory(i, 2, Action::ProgramChange, Trigger::EnterPreset, 0, SwitchType::NA, 15, i, 0);        // hx preset
-    writeSlotToMemory(i, 3, Action::ControlChange, Trigger::ShortPress, 2, SwitchType::Momentary, 15, 69, 8); // hx snapshot down
-    writeSlotToMemory(i, 4, Action::ControlChange, Trigger::ShortPress, 3, SwitchType::Momentary, 15, 69, 9); // hx snapshot up
+    writeSlotToMemory(i, 0, Action::PresetDown, Trigger::ShortPress, Switch::SW1, SwitchType::Momentary, EMPTY, EMPTY, EMPTY); // stego preset
+    writeSlotToMemory(i, 1, Action::PresetUp, Trigger::ShortPress, Switch::SW2, SwitchType::Momentary, EMPTY, EMPTY, EMPTY);   // stego preset
+    writeSlotToMemory(i, 2, Action::ProgramChange, Trigger::EnterPreset, EMPTY, EMPTY, 15, i, EMPTY);                          // hx preset
+    writeSlotToMemory(i, 3, Action::ControlChange, Trigger::ShortPress, Switch::SW3, SwitchType::Momentary, 15, 69, 8);        // hx snapshot down
+    writeSlotToMemory(i, 4, Action::ControlChange, Trigger::ShortPress, Switch::SW4, SwitchType::Momentary, 15, 69, 9);        // hx snapshot up
   }
   loadPreset(CURRENT_PRESET);
 }
@@ -168,22 +195,26 @@ void loop()
 // -- switch handlers --
 void switch1Pressed()
 {
-  executeSwitchAction(Trigger::ShortPress, 0);
+  xprintf("[SW1] pressed\n");
+  executeSwitchAction(Trigger::ShortPress, Switch::SW1);
 }
 
 void switch2Pressed()
 {
-  executeSwitchAction(Trigger::ShortPress, 1);
+  xprintf("[SW2] pressed\n");
+  executeSwitchAction(Trigger::ShortPress, Switch::SW2);
 }
 
 void switch3Pressed()
 {
-  executeSwitchAction(Trigger::ShortPress, 2);
+  xprintf("[SW3] pressed\n");
+  executeSwitchAction(Trigger::ShortPress, Switch::SW3);
 }
 
 void switch4Pressed()
 {
-  executeSwitchAction(Trigger::ShortPress, 3);
+  xprintf("[SW4] pressed\n");
+  executeSwitchAction(Trigger::ShortPress, Switch::SW4);
 }
 
 static void onControlChange(byte channel, byte number, byte value)
@@ -217,15 +248,15 @@ static void onMessageSerial(const MidiMessage &message)
 static void sendControlChange(byte channel, byte number, byte value)
 {
   xprintf("OUT: ControlChange: CH %d, CC %d, VAL %d\n", channel, number, value);
-  MIDICoreUSB.sendControlChange(channel, number, value);
-  MIDICoreSerial.sendControlChange(channel, number, value);
+  MIDICoreUSB.sendControlChange(number, value, channel);
+  MIDICoreSerial.sendControlChange(number, value, channel);
 }
 
 static void sendProgramChange(byte channel, byte number)
 {
   xprintf("OUT: ProgramChange: CH %d, PC %d\n", channel, number);
-  MIDICoreUSB.sendProgramChange(channel, number);
-  MIDICoreSerial.sendProgramChange(channel, number);
+  MIDICoreUSB.sendProgramChange(number, channel);
+  MIDICoreSerial.sendProgramChange(number, channel);
 }
 
 // -- message creation
@@ -311,7 +342,7 @@ void loadPreset(byte preset)
   else if (preset >= NUM_PRESETS)
     preset = 0;
 
-  xprintf("Leaving preset %d\n", CURRENT_PRESET);
+  // xprintf("Leaving preset %d\n", CURRENT_PRESET);
 
   // apply ExitPreset actions from CURRENT_PRESET
   for (int i = 0; i < SLOTS_PER_PRESET; i++)
@@ -324,7 +355,7 @@ void loadPreset(byte preset)
   }
 
   CURRENT_PRESET = preset;
-  xprintf("Loading preset %d\n", preset);
+  xprintf("Load preset %d\n", preset);
 
   // apply EnterPreset actions from CURRENT_PRESET
   for (int i = 0; i < SLOTS_PER_PRESET; i++)
