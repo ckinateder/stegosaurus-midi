@@ -28,7 +28,8 @@
 #define EMPTY 0
 
 // main storage
-byte MEMORY[NUM_PRESETS][SLOTS_PER_PRESET][6]; // NUM_PRESETS presets, SLOTS_PER_PRESET slots, 6 bytes each
+byte MEMORY[NUM_PRESETS][SLOTS_PER_PRESET][7]; // NUM_PRESETS presets, SLOTS_PER_PRESET slots, bytes each
+
 byte CURRENT_PRESET = 0;
 
 // enums
@@ -217,6 +218,20 @@ void switch4Pressed()
   executeSwitchAction(Trigger::ShortPress, Switch::SW4);
 }
 
+/*
+Using CURRENT_PRESET, execute the action for the switchNum
+*/
+void executeSwitchAction(Trigger trigger, byte switchNum)
+{
+  for (int i = 0; i < SLOTS_PER_PRESET; i++)
+  {
+    byte msgType, slotTrigger, slotSwitchNum, switchType, channel, data1, data2;
+    readSlotFromMemory(CURRENT_PRESET, i, &msgType, &slotTrigger, &slotSwitchNum, &switchType, &channel, &data1, &data2);
+    if (slotTrigger == trigger && slotSwitchNum == switchNum)
+      action(msgType, channel, data1, data2);
+  }
+}
+
 static void onControlChange(byte channel, byte number, byte value)
 {
   xprintf("ControlChange from channel: %d, number: %d, value: %d\n", channel, number, value);
@@ -363,20 +378,6 @@ void loadPreset(byte preset)
     byte msgType, trigger, switchNum, switchType, channel, data1, data2;
     readSlotFromMemory(CURRENT_PRESET, i, &msgType, &trigger, &switchNum, &switchType, &channel, &data1, &data2);
     if (trigger == Trigger::EnterPreset)
-      action(msgType, channel, data1, data2);
-  }
-}
-
-/*
-Using CURRENT_PRESET, execute the action for the switchNum
-*/
-void executeSwitchAction(Trigger trigger, byte switchNum)
-{
-  for (int i = 0; i < SLOTS_PER_PRESET; i++)
-  {
-    byte msgType, slotTrigger, slotSwitchNum, switchType, channel, data1, data2;
-    readSlotFromMemory(CURRENT_PRESET, i, &msgType, &slotTrigger, &slotSwitchNum, &switchType, &channel, &data1, &data2);
-    if (slotTrigger == trigger && slotSwitchNum == switchNum)
       action(msgType, channel, data1, data2);
   }
 }
