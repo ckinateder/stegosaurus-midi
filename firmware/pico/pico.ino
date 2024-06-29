@@ -28,6 +28,10 @@
 #define SWITCH_4_PIN 13
 #define NA 0
 
+/*
+ALL BIT LOGIC IS INDEXED FROM LEFT TO RIGHT
+*/
+
 // main storage
 // first slot may look like [32, 0, ...] - switch type (bit in order) latching, switch state (for latching),
 // first slot holds metadata for preset
@@ -199,9 +203,6 @@ void loop()
   switch2.read();
   switch3.read();
   switch4.read();
-
-  delay(2000);
-  switch4Pressed();
 }
 
 // -- switch handlers --
@@ -236,12 +237,11 @@ void executeSwitchAction(Trigger trigger, byte switchNum)
 {
   if (getSwitchType(CURRENT_PRESET, switchNum) == SwitchType::Latch)
   {
-    byte currentState = getSwitchState(CURRENT_PRESET, switchNum);
-    printBinaryByte(currentState);
-    xprintf("\n");
+    bool currentState = getSwitchState(CURRENT_PRESET, switchNum);
+    xprintf("Switch %d is %s\n", switchNum, currentState ? "HIGH" : "LOW");
     setSwitchState(CURRENT_PRESET, switchNum, !currentState);
-    printBinaryByte(getSwitchState(CURRENT_PRESET, switchNum));
-    xprintf("\n");
+    bool newState = getSwitchState(CURRENT_PRESET, switchNum);
+    xprintf("Switch %d is now %s\n", switchNum, newState ? "HIGH" : "LOW");
   }
   // xprintf("Switch %d is %s\n", switchNum, getSwitchState(CURRENT_PRESET, switchNum) ? "HIGH" : "LOW");
 
@@ -363,11 +363,7 @@ Example: setSwitchType(0, Switch:SW1, SwitchType::Latch) would set SW1 to latch.
 */
 void setSwitchType(byte preset, byte switchNum, byte type)
 {
-  byte types = MEMORY[preset][0][0];
-  if (type == SwitchType::Latch)
-    MEMORY[preset][0][0] = types | (1 << (switchNum - SW_OFFSET)); // set bit to 1
-  else
-    MEMORY[preset][0][0] = types & ~(1 << (switchNum - SW_OFFSET)); // set bit to 0
+  setBit(MEMORY[preset][0][0], switchNum - SW_OFFSET, type);
 }
 /*
 Set a single switch state for a preset.
@@ -375,17 +371,7 @@ Example: setSwitchState(0, Switch:SW1, 1) would set SW1 to HIGH.
 */
 void setSwitchState(byte preset, byte switchNum, byte state)
 {
-  byte states = MEMORY[preset][0][1];
-  byte i = (switchNum - SW_OFFSET);
-  // set bit at i to state
-  MEMORY[preset][0][1] = states & ~(1 << i);
-
-  /*
-  if (state == 1)
-    MEMORY[preset][0][1] = states | (1 << (switchNum - SW_OFFSET)); // set bit to 1
-  else
-    MEMORY[preset][0][1] = states & ~(1 << (switchNum - SW_OFFSET)); // set bit to 0
-  */
+  setBit(MEMORY[preset][0][1], switchNum - SW_OFFSET, state);
 }
 
 /*
@@ -394,8 +380,7 @@ Example: getSwitchType(0, Switch::SW1) would return SwitchType::Latch if SW1 is 
 */
 byte getSwitchType(byte preset, byte switchNum)
 {
-  byte types = MEMORY[preset][0][0];
-  return (types & (1 << (switchNum - SW_OFFSET))) ? SwitchType::Latch : SwitchType::Momentary;
+  return isBitSet(MEMORY[preset][0][0], switchNum - SW_OFFSET);
 }
 
 /*
@@ -404,8 +389,7 @@ Example: getSwitchState(0, Switch::SW1) would return 1 if SW1 is HIGH.
 */
 byte getSwitchState(byte preset, byte switchNum)
 {
-  byte states = MEMORY[preset][0][1];
-  return (states & (1 << (switchNum - SW_OFFSET))) ? 1 : 0;
+  return isBitSet(MEMORY[preset][0][1], switchNum - SW_OFFSET);
 }
 
 /*
@@ -421,13 +405,11 @@ void setSwitchStates(byte preset, byte states)
   // if a bit at position i is 1, then the switch at position i must be a latch switch
   // if that's not the case, then the data is invalid
   for (int i = 0; i < 8; i++)
-    if (types & (1 << i))
-      if (!(states & (1 << i)))
-      {
-        xprintf("Switch state does not match switch type!\n");
-        return;
-      }
-
+    if (isBitSet(states, i) && !isBitSet(types, i))
+    {
+      xprintf("Switch state data is invalid!\n");
+      return;
+    }
   MEMORY[preset][0][1] = states; // second byte of first slot is switch states
 }
 
@@ -554,13 +536,13 @@ void printPreset(byte preset)
   // print meta slot (byte 0 switches, byte 1 states)
   xprintf("\n SW_TYPES:  ");
   // print M if momentary, L if latch
-  for (int i = 7; i >= 0; i--)
-    xprintf("%c ", (switches & (1 << i)) ? 'L' : 'M');
+  for (int i = 0; i < 8; i++)
+    xprintf("%c ", isBitSet(switches, i) ? 'L' : 'M');
 
   xprintf("\n SW_STATES: ");
   // print 1 if HIGH, 0 if LOW
-  for (int i = 7; i >= 0; i--)
-    xprintf("%d ", (states & (1 << i)) ? 1 : 0);
+  for (int i = 0; i < 8; i++)
+    xprintf("%d ", isBitSet(states, i));
 
   // print all slots
   for (int i = 1; i < SLOTS_PER_PRESET; i++)
@@ -708,4 +690,35 @@ static void parseSysExMessage(byte *data, unsigned int length)
     Serial.println(segmentLength);
   }
   */
+}
+
+// get bit at position pos from the left
+bool isBitSet(byte b, byte position)
+{
+  // Check if position is within valid range
+  if (position < 0 || position > 7)
+    return false;
+
+  // Calculate the bit position from the right
+  int bitPositionFromRight = 7 - position;
+
+  // Use bitwise operations to find the bit value
+  return (b & (1 << bitPositionFromRight)) != 0;
+}
+
+// set bit to value at position pos from the left
+void setBit(byte &b, byte position, byte value)
+{
+  // Check if position is within valid range
+  if (position < 0 || position > 7)
+    return;
+
+  // Calculate the bit position from the right
+  int bitPositionFromRight = 7 - position;
+
+  // Use bitwise operations to set the bit value
+  if (value == 1)
+    b |= (1 << bitPositionFromRight);
+  else
+    b &= ~(1 << bitPositionFromRight);
 }
