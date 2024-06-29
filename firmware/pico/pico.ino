@@ -68,8 +68,8 @@ enum Trigger
 */
 enum SwitchType
 {
-  Momentary = 1,
-  Latch = 2,
+  Momentary = 0,
+  Latch = 1,
 };
 
 /*
@@ -162,6 +162,11 @@ void setup()
   switch3.begin();
   switch4.begin();
 
+  while (!Serial)
+  {
+    ; // wait for serial port to connect. Needed for native USB
+  }
+
   // ------------------- set up memory -------------------
   // set all memory to 0
   memset(MEMORY, NA, sizeof(MEMORY));
@@ -170,7 +175,8 @@ void setup()
   for (int i = 0; i < NUM_PRESETS; i++)
   {
     // set switch types
-    setSwitchTypes(i, 0b00010000); // switch 4 is latch
+    setSwitchTypes(i, 0b00010000);  // switch 4 is latch
+    setSwitchStates(i, 0b00010000); // all switches are low
     // set midi slots
     writeMidiSlotToMemory(i, 1, Action::PresetDown, Trigger::ShortPress, Switch::SW1, NA, NA, NA, NA);   // stego preset
     writeMidiSlotToMemory(i, 2, Action::PresetUp, Trigger::ShortPress, Switch::SW2, NA, NA, NA, NA);     // stego preset
@@ -179,6 +185,7 @@ void setup()
     writeMidiSlotToMemory(i, 5, Action::ControlChange, Trigger::ShortPress, Switch::SW4, 15, 69, 9, 1);  // hx snapshot up
   }
   loadPreset(CURRENT_PRESET);
+  printPreset(CURRENT_PRESET);
 }
 byte pres = 0;
 void loop()
@@ -193,14 +200,8 @@ void loop()
   switch3.read();
   switch4.read();
 
-  /*
-  delay(1500);
-  loadPreset(pres);
-
-  pres++;
-  if (pres >= 127)
-    pres = 0;
-  */
+  delay(2000);
+  switch4Pressed();
 }
 
 // -- switch handlers --
@@ -233,12 +234,16 @@ Using CURRENT_PRESET, execute the action for the switchNum
 */
 void executeSwitchAction(Trigger trigger, byte switchNum)
 {
-  // update switch states
   if (getSwitchType(CURRENT_PRESET, switchNum) == SwitchType::Latch)
   {
-    byte state = getSwitchState(CURRENT_PRESET, switchNum);
-    updateSwitchStates(CURRENT_PRESET, state ^ (1 << (switchNum - SW_OFFSET)));
+    byte currentState = getSwitchState(CURRENT_PRESET, switchNum);
+    printBinaryByte(currentState);
+    xprintf("\n");
+    setSwitchState(CURRENT_PRESET, switchNum, !currentState);
+    printBinaryByte(getSwitchState(CURRENT_PRESET, switchNum));
+    xprintf("\n");
   }
+  // xprintf("Switch %d is %s\n", switchNum, getSwitchState(CURRENT_PRESET, switchNum) ? "HIGH" : "LOW");
 
   // iterate over slots
   for (int i = 0; i < SLOTS_PER_PRESET; i++)
@@ -371,18 +376,32 @@ Example: setSwitchState(0, Switch:SW1, 1) would set SW1 to HIGH.
 void setSwitchState(byte preset, byte switchNum, byte state)
 {
   byte states = MEMORY[preset][0][1];
+  byte i = (switchNum - SW_OFFSET);
+  // set bit at i to state
+  MEMORY[preset][0][1] = states & ~(1 << i);
+
+  /*
   if (state == 1)
     MEMORY[preset][0][1] = states | (1 << (switchNum - SW_OFFSET)); // set bit to 1
   else
     MEMORY[preset][0][1] = states & ~(1 << (switchNum - SW_OFFSET)); // set bit to 0
+  */
 }
 
+/*
+Get the switch type for a specific switch in a preset
+Example: getSwitchType(0, Switch::SW1) would return SwitchType::Latch if SW1 is a latch switch.
+*/
 byte getSwitchType(byte preset, byte switchNum)
 {
   byte types = MEMORY[preset][0][0];
   return (types & (1 << (switchNum - SW_OFFSET))) ? SwitchType::Latch : SwitchType::Momentary;
 }
 
+/*
+Get the switch state for a specific switch in a preset
+Example: getSwitchState(0, Switch::SW1) would return 1 if SW1 is HIGH.
+*/
 byte getSwitchState(byte preset, byte switchNum)
 {
   byte states = MEMORY[preset][0][1];
@@ -395,7 +414,7 @@ It's encoded from LEFT to RIGHT, so SW1 is the leftmost bit.
 For example, 0b10000000 would mean that SW1 is HIGH.
 This is only used for latch switches, momentary switches are always LOW in this byte.
 */
-void updateSwitchStates(byte preset, byte states)
+void setSwitchStates(byte preset, byte states)
 {
   // check validity of data against switch types
   byte types = MEMORY[preset][0][0];
@@ -412,11 +431,17 @@ void updateSwitchStates(byte preset, byte states)
   MEMORY[preset][0][1] = states; // second byte of first slot is switch states
 }
 
+/*
+Reset all switch states to 0
+*/
 void resetSwitchStates(byte preset)
 {
   MEMORY[preset][0][1] = 0; // second byte of first slot is switch states
 }
 
+/*
+Read a slot from memory
+*/
 void readSlotFromMemory(byte preset, byte slot, byte *msgType, byte *trigger, byte *switchNum, byte *channel, byte *data1, byte *data2, byte *data3)
 {
   *msgType = MEMORY[preset][slot][0];
@@ -428,6 +453,9 @@ void readSlotFromMemory(byte preset, byte slot, byte *msgType, byte *trigger, by
   *data3 = MEMORY[preset][slot][6];
 }
 
+/*
+Print a slot from memory
+*/
 void printSlot(byte preset, byte slot)
 {
   byte msgType, trigger, switchNum, channel, data1, data2, data3;
@@ -519,7 +547,23 @@ void printPreset(byte preset)
   byte printed = 0;
   byte data[SLOTS_PER_PRESET * BYTES_PER_SLOT];
   readPresetFromMemory(preset, data);
-  for (int i = 0; i < SLOTS_PER_PRESET; i++)
+
+  byte switches = MEMORY[preset][0][0];
+  byte states = MEMORY[preset][0][1];
+
+  // print meta slot (byte 0 switches, byte 1 states)
+  xprintf("\n SW_TYPES:  ");
+  // print M if momentary, L if latch
+  for (int i = 7; i >= 0; i--)
+    xprintf("%c ", (switches & (1 << i)) ? 'L' : 'M');
+
+  xprintf("\n SW_STATES: ");
+  // print 1 if HIGH, 0 if LOW
+  for (int i = 7; i >= 0; i--)
+    xprintf("%d ", (states & (1 << i)) ? 1 : 0);
+
+  // print all slots
+  for (int i = 1; i < SLOTS_PER_PRESET; i++)
   {
     // check if empty
     byte empty[BYTES_PER_SLOT];
@@ -592,6 +636,15 @@ byte rightNybble(const byte b)
 byte randomByte(byte min, byte max)
 {
   return random(min, max + 1);
+}
+
+void printBinaryByte(byte b)
+{
+  Serial.print("0b");
+  for (int i = 7; i >= 0; i--)
+  {
+    Serial.print(bitRead(b, i));
+  }
 }
 
 // sysex
