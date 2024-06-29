@@ -87,7 +87,7 @@ enum Switch
 };
 
 // declare defaults
-void writeMidiSlotToMemory(byte preset, byte slot, byte msgType, byte trigger, byte switchNum, byte switchType, byte channel, byte data1 = NA, byte data2 = NA, byte data3 = NA);
+void writeMidiSlotToMemory(byte preset, byte slot, byte msgType, byte trigger, byte switchNum, byte channel, byte data1 = NA, byte data2 = NA, byte data3 = NA);
 
 // switchs
 EasyButton switch1(SWITCH_1_PIN, DEBOUNCE, PULLUP, true);
@@ -169,12 +169,14 @@ void setup()
   // populate memory with some defaults
   for (int i = 0; i < NUM_PRESETS; i++)
   {
-    setSwitchTypes(i, 0b00010000);                                                                                              // switch 4 is latch
-    writeMidiSlotToMemory(i, 1, Action::PresetDown, Trigger::ShortPress, Switch::SW1, SwitchType::Momentary, NA, NA, NA, NA);   // stego preset
-    writeMidiSlotToMemory(i, 2, Action::PresetUp, Trigger::ShortPress, Switch::SW2, SwitchType::Momentary, NA, NA, NA, NA);     // stego preset
-    writeMidiSlotToMemory(i, 3, Action::ProgramChange, Trigger::EnterPreset, NA, NA, 15, i, NA, NA);                            // hx preset
-    writeMidiSlotToMemory(i, 4, Action::ControlChange, Trigger::ShortPress, Switch::SW3, SwitchType::Momentary, 15, 69, 8, NA); // hx snapshot down
-    writeMidiSlotToMemory(i, 5, Action::ControlChange, Trigger::ShortPress, Switch::SW4, SwitchType::Latch, 15, 69, 9, 1);      // hx snapshot up
+    // set switch types
+    setSwitchTypes(i, 0b00010000); // switch 4 is latch
+    // set midi slots
+    writeMidiSlotToMemory(i, 1, Action::PresetDown, Trigger::ShortPress, Switch::SW1, NA, NA, NA, NA);   // stego preset
+    writeMidiSlotToMemory(i, 2, Action::PresetUp, Trigger::ShortPress, Switch::SW2, NA, NA, NA, NA);     // stego preset
+    writeMidiSlotToMemory(i, 3, Action::ProgramChange, Trigger::EnterPreset, NA, 15, i, NA, NA);         // hx preset
+    writeMidiSlotToMemory(i, 4, Action::ControlChange, Trigger::ShortPress, Switch::SW3, 15, 69, 8, NA); // hx snapshot down
+    writeMidiSlotToMemory(i, 5, Action::ControlChange, Trigger::ShortPress, Switch::SW4, 15, 69, 9, 1);  // hx snapshot up
   }
   loadPreset(CURRENT_PRESET);
 }
@@ -232,32 +234,30 @@ Using CURRENT_PRESET, execute the action for the switchNum
 void executeSwitchAction(Trigger trigger, byte switchNum)
 {
   // update switch states
-  // SWITCH_STATES ^= 1 << (switchNum - SW_OFFSET); // set switch state to opposite of current, bit logic
-
   if (getSwitchType(CURRENT_PRESET, switchNum) == SwitchType::Latch)
   {
     byte state = getSwitchState(CURRENT_PRESET, switchNum);
     updateSwitchStates(CURRENT_PRESET, state ^ (1 << (switchNum - SW_OFFSET)));
   }
 
+  // iterate over slots
   for (int i = 0; i < SLOTS_PER_PRESET; i++)
   {
-    byte msgType, slotTrigger, slotSwitchNum, switchType, channel, data1, data2, data3;
-    readSlotFromMemory(CURRENT_PRESET, i, &msgType, &slotTrigger, &slotSwitchNum, &switchType, &channel, &data1, &data2, &data3);
+    // read the preset
+    byte msgType, slotTrigger, slotSwitchNum, channel, data1, data2, data3;
+    readSlotFromMemory(CURRENT_PRESET, i, &msgType, &slotTrigger, &slotSwitchNum, &channel, &data1, &data2, &data3);
 
     // check if type is latch
     if (slotTrigger == trigger && slotSwitchNum == switchNum)
       if (getSwitchType(CURRENT_PRESET, switchNum) == SwitchType::Latch)
       {
-        xprintf("Latch not yet supported!\n");
-        return;
-
-        // check switch state
+        // check switch state and execute
         if (getSwitchState(CURRENT_PRESET, switchNum) == 0)
-          action(msgType, channel, data1, data2);
+          action(msgType, channel, data1, data2); // data2 is the value to latch to
         else
-          action(msgType, channel, data1, data3);
+          action(msgType, channel, data1, data3); // data3 is the value to return to
       }
+      // if momentary, just execute
       else
         action(msgType, channel, data1, data2);
   }
@@ -312,11 +312,8 @@ For program change, data1 is the program number.
 For control change, data1 is the control number, data2 is the value when pressed.
 Data3 is only used for msgType = ControlChange and switchType = Latch. Data2 is the value to latch to, data3 is the value to return to.
 */
-void writeMidiSlotToMemory(byte preset, byte slot, byte msgType, byte trigger, byte switchNum, byte switchType, byte channel, byte data1, byte data2, byte data3)
+void writeMidiSlotToMemory(byte preset, byte slot, byte msgType, byte trigger, byte switchNum, byte channel, byte data1, byte data2, byte data3)
 {
-  // combine switch number and type (4 bits each)
-  // left nybble is switch number, right nybble is switch type
-  byte switchNumType = (switchNum << 4) | switchType;
 
   // xprintf("Writing to memory: %d %d %d %d %d %d %d %d %d\n", msgType, trigger, switchNum, switchType, channel, data1, data2, data3);
   // check validity of data
@@ -334,7 +331,7 @@ void writeMidiSlotToMemory(byte preset, byte slot, byte msgType, byte trigger, b
   // write to memory
   MEMORY[preset][slot][0] = msgType;
   MEMORY[preset][slot][1] = trigger;
-  MEMORY[preset][slot][2] = switchNumType;
+  MEMORY[preset][slot][2] = switchNum;
   MEMORY[preset][slot][3] = channel;
   MEMORY[preset][slot][4] = data1;
   MEMORY[preset][slot][5] = data2;
@@ -356,24 +353,37 @@ void setSwitchTypes(byte preset, byte types)
 }
 
 /*
-Update a single switch state for a preset
+Update a single switch tyoe for a preset
+Example: setSwitchType(0, Switch:SW1, SwitchType::Latch) would set SW1 to latch.
 */
-void updateSwitchType(byte preset, Switch switchNum, SwitchType type)
+void setSwitchType(byte preset, byte switchNum, byte type)
 {
   byte types = MEMORY[preset][0][0];
   if (type == SwitchType::Latch)
-    MEMORY[preset][0][0] = types | (1 << (switchNum - SW_OFFSET));
+    MEMORY[preset][0][0] = types | (1 << (switchNum - SW_OFFSET)); // set bit to 1
   else
-    MEMORY[preset][0][0] = types & ~(1 << (switchNum - SW_OFFSET));
+    MEMORY[preset][0][0] = types & ~(1 << (switchNum - SW_OFFSET)); // set bit to 0
+}
+/*
+Set a single switch state for a preset.
+Example: setSwitchState(0, Switch:SW1, 1) would set SW1 to HIGH.
+*/
+void setSwitchState(byte preset, byte switchNum, byte state)
+{
+  byte states = MEMORY[preset][0][1];
+  if (state == 1)
+    MEMORY[preset][0][1] = states | (1 << (switchNum - SW_OFFSET)); // set bit to 1
+  else
+    MEMORY[preset][0][1] = states & ~(1 << (switchNum - SW_OFFSET)); // set bit to 0
 }
 
-SwitchType getSwitchType(byte preset, Switch switchNum)
+byte getSwitchType(byte preset, byte switchNum)
 {
   byte types = MEMORY[preset][0][0];
   return (types & (1 << (switchNum - SW_OFFSET))) ? SwitchType::Latch : SwitchType::Momentary;
 }
 
-byte getSwitchState(byte preset, Switch switchNum)
+byte getSwitchState(byte preset, byte switchNum)
 {
   byte states = MEMORY[preset][0][1];
   return (states & (1 << (switchNum - SW_OFFSET))) ? 1 : 0;
@@ -407,12 +417,11 @@ void resetSwitchStates(byte preset)
   MEMORY[preset][0][1] = 0; // second byte of first slot is switch states
 }
 
-void readSlotFromMemory(byte preset, byte slot, byte *msgType, byte *trigger, byte *switchNum, byte *switchType, byte *channel, byte *data1, byte *data2, byte *data3)
+void readSlotFromMemory(byte preset, byte slot, byte *msgType, byte *trigger, byte *switchNum, byte *channel, byte *data1, byte *data2, byte *data3)
 {
   *msgType = MEMORY[preset][slot][0];
   *trigger = MEMORY[preset][slot][1];
-  *switchNum = leftNybble(MEMORY[preset][slot][2]);
-  *switchType = rightNybble(MEMORY[preset][slot][2]);
+  *switchNum = MEMORY[preset][slot][2];
   *channel = MEMORY[preset][slot][3];
   *data1 = MEMORY[preset][slot][4];
   *data2 = MEMORY[preset][slot][5];
@@ -421,9 +430,9 @@ void readSlotFromMemory(byte preset, byte slot, byte *msgType, byte *trigger, by
 
 void printSlot(byte preset, byte slot)
 {
-  byte msgType, trigger, switchNum, switchType, channel, data1, data2, data3;
-  readSlotFromMemory(preset, slot, &msgType, &trigger, &switchNum, &switchType, &channel, &data1, &data2, &data3);
-  xprintf("Preset [%d][%d]: %d %d %d %d %d %d %d %d\n", preset, slot, msgType, trigger, switchNum, switchType, channel, data1, data2, data3);
+  byte msgType, trigger, switchNum, channel, data1, data2, data3;
+  readSlotFromMemory(preset, slot, &msgType, &trigger, &switchNum, &channel, &data1, &data2, &data3);
+  xprintf("Preset [%d][%d]: %d %d %d %d %d %d %d %d\n", preset, slot, msgType, trigger, switchNum, channel, data1, data2, data3);
 }
 
 /*
@@ -479,15 +488,13 @@ void loadPreset(byte preset)
   // apply ExitPreset actions from CURRENT_PRESET
   for (int i = 0; i < SLOTS_PER_PRESET; i++)
   {
-    byte msgType, trigger, switchNum, switchType, channel, data1, data2, data3;
-    readSlotFromMemory(CURRENT_PRESET, i, &msgType, &trigger, &switchNum, &switchType, &channel, &data1, &data2, &data3);
+    byte msgType, trigger, switchNum, channel, data1, data2, data3;
+    readSlotFromMemory(CURRENT_PRESET, i, &msgType, &trigger, &switchNum, &channel, &data1, &data2, &data3);
     if (trigger == Trigger::ExitPreset)
       action(msgType, channel, data1, data2);
-    else if ((trigger == Trigger::ShortPress || trigger == Trigger::LongPress || trigger == Trigger::DoublePress) && switchType == SwitchType::Latch)
-    {
-      // reset latch
-    }
   }
+
+  // don't forget to reset latches and switch states
 
   CURRENT_PRESET = preset;
   xprintf("Load preset %d\n", preset);
@@ -496,8 +503,8 @@ void loadPreset(byte preset)
   // apply EnterPreset actions from CURRENT_PRESET
   for (int i = 0; i < SLOTS_PER_PRESET; i++)
   {
-    byte msgType, trigger, switchNum, switchType, channel, data1, data2, data3;
-    readSlotFromMemory(CURRENT_PRESET, i, &msgType, &trigger, &switchNum, &switchType, &channel, &data1, &data2, &data3);
+    byte msgType, trigger, switchNum, channel, data1, data2, data3;
+    readSlotFromMemory(CURRENT_PRESET, i, &msgType, &trigger, &switchNum, &channel, &data1, &data2, &data3);
     if (trigger == Trigger::EnterPreset)
       action(msgType, channel, data1, data2);
   }
