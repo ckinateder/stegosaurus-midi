@@ -642,8 +642,8 @@ void printPreset(byte preset)
 {
   xprintf("Preset %03d:", preset);
   byte printed = 0;
-  byte data[SLOTS_PER_PRESET * BYTES_PER_SLOT];
-  readPresetFromMemory(preset, data);
+  byte data[SLOTS_PER_PRESET][BYTES_PER_SLOT];
+  copyPresetFromMemory(preset, data);
 
   // print meta slot (byte 0 switches, byte 1 states)
   xprintf("\n SW_TYPES:  ");
@@ -656,21 +656,17 @@ void printPreset(byte preset)
   for (int i = 0; i < 8; i++)
     xprintf("%d ", getSwitchState(i));
 
-  // print all slots
   for (int i = 1; i < SLOTS_PER_PRESET; i++)
   {
-    // check if empty
-    byte empty[BYTES_PER_SLOT];
-    memset(empty, 0, BYTES_PER_SLOT);
-
-    if (memcmp(data + i * BYTES_PER_SLOT, empty, BYTES_PER_SLOT) == 0)
+    byte copied[BYTES_PER_SLOT];
+    // copy slot i from data into copied
+    memcpy(copied, data[i], BYTES_PER_SLOT);
+    // check if msgType is NA
+    if (copied[0] == NA)
       continue;
-    else
-    {
-      xprintf("\n [%02d]: ", i);
-      printHexArray(data + i * BYTES_PER_SLOT, BYTES_PER_SLOT);
-      printed++;
-    }
+    xprintf("\n [%02d]: ", i);
+    printHexArray(copied, BYTES_PER_SLOT);
+    printed++;
   }
 
   // don't count meta slot, it's not accessible by the user
