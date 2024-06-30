@@ -34,7 +34,7 @@
 // memory settings
 #define NUM_PRESETS 128
 #define BYTES_PER_SLOT 7
-#define SLOTS_PER_PRESET 16
+#define SLOTS_PER_PRESET 17
 
 // switch memory location
 #define META_SLOT 0
@@ -54,7 +54,8 @@ ALL BIT LOGIC IS INDEXED FROM LEFT TO RIGHT
 // main storage
 // first slot may look like [32, 0, ...] - switch type (bit in order) latching, switch state (for latching),
 // first slot holds metadata for preset
-byte MEMORY[NUM_PRESETS][SLOTS_PER_PRESET + 1][BYTES_PER_SLOT]; // NUM_PRESETS presets, SLOTS_PER_PRESET slots, bytes each
+byte MEMORY[NUM_PRESETS][SLOTS_PER_PRESET][BYTES_PER_SLOT];   // NUM_PRESETS presets, SLOTS_PER_PRESET slots, bytes each
+byte CURRENT_PRESET_MEMORY[SLOTS_PER_PRESET][BYTES_PER_SLOT]; // current preset memory
 byte CURRENT_PRESET = 0;
 
 // enums
@@ -255,8 +256,8 @@ void executeSwitchAction(Trigger trigger, byte switchNum)
   }
   // xprintf("Switch %d is %s\n", switchNum, getSwitchState(CURRENT_PRESET, switchNum) ? "HIGH" : "LOW");
 
-  // iterate over slots
-  for (int i = 0; i < SLOTS_PER_PRESET; i++)
+  // iterate over slots, skipping slot 0
+  for (int i = 1; i < SLOTS_PER_PRESET; i++)
   {
     // read the preset
     byte msgType, slotTrigger, slotSwitchNum, channel, data1, data2, data3;
@@ -332,7 +333,7 @@ void writeMidiSlotToMemory(byte preset, byte slot, byte msgType, byte trigger, b
 
   // xprintf("Writing to memory: %d %d %d %d %d %d %d %d %d\n", msgType, trigger, switchNum, switchType, channel, data1, data2, data3);
   // check validity of data
-  if (preset >= NUM_PRESETS || slot >= SLOTS_PER_PRESET)
+  if (preset > NUM_PRESETS - 1 || slot > SLOTS_PER_PRESET - 1)
   {
     xprintf("Preset/slot OOB!\n");
     return;
@@ -495,12 +496,16 @@ Read a preset from memory
 void readPresetFromMemory(byte preset, byte *data)
 {
   for (int i = 0; i < SLOTS_PER_PRESET; i++)
-  {
     for (int j = 0; j < BYTES_PER_SLOT; j++)
-    {
       data[i * BYTES_PER_SLOT + j] = MEMORY[preset][i][j];
-    }
-  }
+}
+
+// data is a 2d array, with each row being a slot
+void copyPresetFromMemory(byte preset, byte data[SLOTS_PER_PRESET][BYTES_PER_SLOT])
+{
+  for (int i = 0; i < SLOTS_PER_PRESET; i++)
+    for (int j = 0; j < BYTES_PER_SLOT; j++)
+      data[i][j] = MEMORY[preset][i][j];
 }
 
 /*
@@ -515,7 +520,7 @@ void loadPreset(byte preset)
     preset = 0;
 
   // apply ExitPreset actions from CURRENT_PRESET
-  for (int i = 0; i < SLOTS_PER_PRESET; i++)
+  for (int i = 1; i < SLOTS_PER_PRESET; i++)
   {
     byte msgType, trigger, switchNum, channel, data1, data2, data3;
     readSlotFromMemory(CURRENT_PRESET, i, &msgType, &trigger, &switchNum, &channel, &data1, &data2, &data3);
@@ -528,11 +533,16 @@ void loadPreset(byte preset)
   }
 
   CURRENT_PRESET = preset;
+
+  // copy preset to current preset memory
+  copyPresetFromMemory(CURRENT_PRESET, CURRENT_PRESET_MEMORY);
+
+  // load preset and apply EnterPreset actions
   xprintf("Load preset %d\n", preset);
   printPreset(preset);
 
   // apply EnterPreset actions from CURRENT_PRESET
-  for (int i = 0; i < SLOTS_PER_PRESET; i++)
+  for (int i = 1; i < SLOTS_PER_PRESET; i++)
   {
     byte msgType, trigger, switchNum, channel, data1, data2, data3;
     readSlotFromMemory(CURRENT_PRESET, i, &msgType, &trigger, &switchNum, &channel, &data1, &data2, &data3);
@@ -582,10 +592,12 @@ void printPreset(byte preset)
       printed++;
     }
   }
+
+  // don't count meta slot, it's not accessible by the user
   if (printed == 0)
     xprintf(" (empty)");
   else
-    xprintf("\n %d/%d slots used", printed, SLOTS_PER_PRESET);
+    xprintf("\n %d/%d slots used", printed, SLOTS_PER_PRESET - 1);
 
   xprintf("\n");
 }
