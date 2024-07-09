@@ -180,10 +180,7 @@ void setup()
   switch3.begin();
   switch4.begin();
 
-  while (!Serial)
-  {
-    ; // wait for serial port to connect. Needed for native USB
-  }
+  // while (!Serial) ; // wait for serial port to connect. Needed for native USB
 
   // ------------------- set up memory -------------------
   // set all memory to 0
@@ -756,8 +753,6 @@ static void onSystemExclusive(byte *data, unsigned int length)
 static void parseSysExMessage(byte *data, unsigned int length)
 {
   unsigned int start = 5;
-  byte operation = leftNybble(*(data + start));
-  byte saveToROM = rightNybble(*(data + start));
   int segmentLength = length - start;
   /*
   if (false)

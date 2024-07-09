@@ -1,7 +1,9 @@
 import { WebMidi } from "webmidi";
 import { processArray, AppContext } from "./util.js";
 
-function addListeners(selectedInput) {
+const MFID = [0x00, 0x53, 0x4d];
+
+export function addListeners(selectedInput) {
   try {
     selectedInput.removeListener();
   } catch (e) {
@@ -31,8 +33,11 @@ function addListeners(selectedInput) {
   }
 }
 
-function sendMidiMessage() {
-  AppContext.output.sendProgramChange(28);
+// make a function to send a sysex byte array
+export function sendSysexMessage(byteArray) {
+  AppContext.output.sendSysex(MFID, byteArray);
 }
 
-export { addListeners, sendMidiMessage };
+export function sendMidiMessage() {
+  AppContext.output.sendProgramChange(28);
+}

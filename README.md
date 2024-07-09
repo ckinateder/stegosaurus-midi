@@ -63,6 +63,10 @@ The Stegosaurus will use the following MIDI messages. Keep in mind that the firs
 ### Memory Layout
 There are 128 presets, each with 16 slots.
 
+#### Preset Layout
+
+
+
 ### Message Structure
 
 The message is broken up into 2 parts: the header and the data. The header is the first 4 bytes of the message, and the data is the rest of the message.
