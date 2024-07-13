@@ -171,6 +171,12 @@ This message will write the data to the specified slot in the specified preset.
 | 6    | Slot to read |
 
 This returns the data from the specified slot in the specified preset in the same format as the write message.
+Note that the preset and slot are returned in the message.
+An example message would be:
+
+```
+F0 04 01 03 01 00 0F 45 08 00 F7
+```
 
 #### System Parameter Set
 

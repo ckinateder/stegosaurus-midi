@@ -245,6 +245,18 @@ void loop()
 // -- switch handlers --
 void switch1Pressed()
 {
+  byte testSlotInfo[9] = {
+      4, // preset
+      1, // slot
+      Trigger::ShortPress,
+      Action::ControlChange,
+      Switch::SWA,
+      15, // channel
+      69, // data1
+      8,  // data2
+      NA  // data3
+  };
+  sendSystemExclusive(testSlotInfo, 9);
   xprintf("[SWA] pressed\n");
   executeSwitchAction(Trigger::ShortPress, Switch::SWA);
 }
@@ -378,6 +390,17 @@ static void sendProgramChange(byte channel, byte number)
   MIDICoreSerial.sendProgramChange(number, channel);
 }
 
+void sendSystemExclusive(byte *data, unsigned int length)
+{
+  xprintf("OUT: SysEx (%d): ", length);
+  printHexArray(data, length);
+  xprintf("\n");
+
+  // send the message
+  // sendSysEx (int length, const byte *const array, bool ArrayContainsBoundaries=false)
+  MIDICoreUSB.sendSysEx(length, data, false);
+  MIDICoreSerial.sendSysEx(length, data, false);
+}
 // -- message creation
 
 /**
@@ -909,6 +932,27 @@ static void parseSysExMessage(byte *data, unsigned int length)
   }
   else if (msgType == MsgTypes::GetSlot)
   {
+    byte preset = *(data + 5);
+    byte slot = *(data + 6);
+    xprintf("GetSlot: %d %d\n", preset, slot);
+
+    // read from memory
+    byte trigger, action, switchNum, channel, data1, data2, data3;
+    readSlot(slot, &trigger, &action, &switchNum, &channel, &data1, &data2, &data3);
+
+    // send the message
+    byte slotInfo[9] = {
+        preset,
+        slot,
+        trigger,
+        action,
+        switchNum,
+        channel,
+        data1,
+        data2,
+        data3};
+
+    sendSystemExclusive(slotInfo, 9);
   }
   else if (msgType == MsgTypes::SetSystemParam)
   {
