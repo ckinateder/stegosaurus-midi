@@ -23,8 +23,14 @@ const SWITCHES = [
 const MSG_TYPES = [
   { name: "SetSlot", value: 0, display: "Set Slot" },
   { name: "GetSlot", value: 1, display: "Get Slot" },
-  { name: "SetSystemParam", value: 2, display: "Set System Param" },
-  { name: "GetSystemParam", value: 3, display: "Get System Param" },
+  { name: "GetSlotReturn", value: 2, display: "Get Slot Return" },
+  { name: "SetSystemParam", value: 3, display: "Set System Param" },
+  { name: "GetSystemParam", value: 4, display: "Get System Param" },
+  {
+    name: "GetSystemParamReturn",
+    value: 5,
+    display: "Get System Param Return",
+  },
 ];
 
 const SYSTEM_PARAMS = [

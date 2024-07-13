@@ -193,6 +193,13 @@ export function DropdownGroup() {
               EnumValue(SYSTEM_PARAMS, "CurrentPreset"),
               p
             );
+
+            // get the new preset's slots
+            const getSlotVal = EnumValue(MSG_TYPES, "GetSlot");
+            console.log(`Getting slots for preset ${p}`);
+            for (let i = 1; i <= 16; i++) {
+              sendSysexMessage([getSlotVal, p, i]);
+            }
           }}
         >
           {presets.map((preset, index) => (

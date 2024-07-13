@@ -111,10 +111,12 @@ enum Switch
 
 enum MsgTypes
 {
-  SetSlot = 0,        // set a slot - this will call writeSlot
-  GetSlot = 1,        // get a slot - this will call readSlot
-  SetSystemParam = 2, // set a system param
-  GetSystemParam = 3, // get a system param
+  SetSlot = 0,              // set a slot - this will call writeSlot
+  GetSlot = 1,              // get a slot - this will call readSlot
+  GetSlotReturn = 2,        // return value from get slot
+  SetSystemParam = 3,       // set a system param
+  GetSystemParam = 4,       // get a system param
+  GetSystemParamReturn = 5, // return value from get system param
 };
 
 enum SystemParams
@@ -245,18 +247,6 @@ void loop()
 // -- switch handlers --
 void switch1Pressed()
 {
-  byte testSlotInfo[9] = {
-      4, // preset
-      1, // slot
-      Trigger::ShortPress,
-      Action::ControlChange,
-      Switch::SWA,
-      15, // channel
-      69, // data1
-      8,  // data2
-      NA  // data3
-  };
-  sendSystemExclusive(testSlotInfo, 9);
   xprintf("[SWA] pressed\n");
   executeSwitchAction(Trigger::ShortPress, Switch::SWA);
 }
@@ -392,14 +382,24 @@ static void sendProgramChange(byte channel, byte number)
 
 void sendSystemExclusive(byte *data, unsigned int length)
 {
-  xprintf("OUT: SysEx (%d): ", length);
-  printHexArray(data, length);
+  // prepend MFID_ARRAY to data
+  unsigned int fullLength = length + 5;
+  byte fullData[fullLength];
+  fullData[0] = 0xF0;
+  fullData[1] = 0x00;
+  fullData[2] = MFID_1;
+  fullData[3] = MFID_2;
+  memcpy(fullData + 4, data, length);
+  fullData[length + 4] = 0xF7;
+
+  xprintf("OUT: SysEx (%d): ", fullLength);
+  printHexArray(fullData, fullLength);
   xprintf("\n");
 
   // send the message
   // sendSysEx (int length, const byte *const array, bool ArrayContainsBoundaries=false)
-  MIDICoreUSB.sendSysEx(length, data, false);
-  MIDICoreSerial.sendSysEx(length, data, false);
+  MIDICoreUSB.sendSysEx(fullLength, fullData, true);
+  MIDICoreSerial.sendSysEx(fullLength, fullData, true);
 }
 // -- message creation
 
@@ -934,14 +934,15 @@ static void parseSysExMessage(byte *data, unsigned int length)
   {
     byte preset = *(data + 5);
     byte slot = *(data + 6);
-    xprintf("GetSlot: %d %d\n", preset, slot);
+    xprintf("GetSlot: Preset %d, Slot %d\n", preset, slot);
 
     // read from memory
     byte trigger, action, switchNum, channel, data1, data2, data3;
     readSlot(slot, &trigger, &action, &switchNum, &channel, &data1, &data2, &data3);
 
     // send the message
-    byte slotInfo[9] = {
+    byte slotInfo[10] = {
+        MsgTypes::GetSlotReturn,
         preset,
         slot,
         trigger,
@@ -952,7 +953,7 @@ static void parseSysExMessage(byte *data, unsigned int length)
         data2,
         data3};
 
-    sendSystemExclusive(slotInfo, 9);
+    sendSystemExclusive(slotInfo, 10);
   }
   else if (msgType == MsgTypes::SetSystemParam)
   {

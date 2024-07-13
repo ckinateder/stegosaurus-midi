@@ -26,7 +26,7 @@ export function addListeners(selectedInput) {
       console.log(info);
     });
     selectedInput.addListener("sysex", (e) => {
-      const info = `sysex: ${processArray(e.dataBytes)}`;
+      const info = `IN Sysex: ${processArray(e.dataBytes)}`;
       console.log(info);
     });
   } catch (e) {
@@ -36,6 +36,7 @@ export function addListeners(selectedInput) {
 
 // make a function to send a sysex byte array
 export function sendSysexMessage(byteArray) {
+  console.log(`OUT Sysex: ${processArray(byteArray)}`);
   AppContext.output.sendSysex(MFID, byteArray);
 }
 
