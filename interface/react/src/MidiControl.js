@@ -86,7 +86,3 @@ export function sendSetSystemParamMessage(param, value) {
   const byteArray = [EnumValue(MSG_TYPES, "SetSystemParam"), param, value];
   sendSysexMessage(byteArray);
 }
-
-export function sendMidiMessage() {
-  AppContext.output.sendProgramChange(28);
-}

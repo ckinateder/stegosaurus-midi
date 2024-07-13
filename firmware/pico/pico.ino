@@ -668,7 +668,7 @@ void setCurrentPreset(byte preset)
 
 /**
  * @brief Save the current preset memory to main memory
- *
+ * This is memory safe - it only copies over the changed slots to avoid unnecessary writes.
  * @param preset
  */
 void savePreset(byte preset)
@@ -680,10 +680,20 @@ void savePreset(byte preset)
     return;
   }
 
-  // copy current preset memory to main memory
+  // copy current preset memory to main memory, ignoring anything unchanged
   for (int i = 0; i < SLOTS_PER_PRESET; i++)
     for (int j = 0; j < BYTES_PER_SLOT; j++)
-      MEMORY[preset][i][j] = CURRENT_PRESET_MEMORY[i][j];
+      if (MEMORY[preset][i][j] != CURRENT_PRESET_MEMORY[i][j])
+        MEMORY[preset][i][j] = CURRENT_PRESET_MEMORY[i][j];
+}
+
+/**
+ * @brief Save the current preset memory to main memory
+ *
+ */
+void savePreset()
+{
+  savePreset(CURRENT_PRESET);
 }
 
 /**
@@ -895,6 +905,7 @@ static void parseSysExMessage(byte *data, unsigned int length)
     // write to memory
     xprintf("SetSlot: %d %d %d %d %d %d %d %d %d\n", preset, slot, trigger, action, switchNum, channel, data1, data2, data3);
     writeSlot(slot, trigger, action, switchNum, channel, data1, data2, data3);
+    savePreset();
   }
   else if (msgType == MsgTypes::GetSlot)
   {
