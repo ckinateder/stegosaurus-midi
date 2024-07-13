@@ -58,14 +58,21 @@ To program the controller behavior, the interface will send a SysEx message with
 
 ## MIDI Messages
 
-The Stegosaurus will use the following MIDI messages. Keep in mind that the first 4 bytes of the message are specific to the SysEx MIDI protocol. The rest of the message is the actual data. Every message is concluded with the SysEx end byte `0xF7`.
+The Stegosaurus will use the following MIDI messages. Keep in mind that the first 4 bytes of the message are specific to the SysEx MIDI protocol. The rest of the message is the actual data. Every SysEx message is concluded with the SysEx end byte `0xF7`.
 
 ### Memory Layout
-There are 128 presets, each with 16 slots.
+There are 128 presets, each with 17 slots, and 7 bytes per slot. The slots are numbered 1-16, with slot 0 reserved for metadata. The metadata for each preset is as follows:
+
+| Byte | Description    |
+|------|----------------|
+| 0    | Switch type    |
+| 1    | Switch values  |
+
+The switch type is a 1-byte value that indicates the type of switch that the preset uses. Each bit from right to left indicates a switch. 0 is a momentary switch, and 1 is a latching switch. For example, 0b10000000 would mean that SWA is LATCHING and the rest are momentary.
+
+The switch values are a 1-byte value that indicates the current state of the switches. Each bit from right to left indicates a switch. 0 is off, and 1 is on. For example, 0b10000000 would mean that SWA is on and the rest are off. This only applies to latching switches. This value is tracked fso that the user can set a switch to a specific state when they enter a preset.
 
 #### Preset Layout
-
-
 
 ### Message Structure
 
@@ -77,95 +84,107 @@ Types of messages:
 - Program get
 - Variable set
 
-**IMPORTANT**: 
-| Saved to main memory |
-|-----------------------|
-| Control change        |
-| Program change        |
-
 
 #### Header
 
-| Byte | Value                                                            |
-|------|----------------------------------------------------------------------|
-| 0 | 0xF0 (SysEx start) |
-| 1 | 0x00 (Three-byte Vendor ID) |
-| 2 | 0x53 (Vendor ID) |
-| 3 | 0x4D (Vendor ID) |
+| Byte | Description | Value                                                            |
+|------|------------|-----------------------|
+| 0 | Status byte | 0xF0 (SysEx start) |
+| 1 | Vendor ID | 0x00 (Three-byte Vendor ID) |
+| 2 | Vendor ID | 0x53 (Vendor ID) |
+| 3 | Vendor ID | 0x4D (Vendor ID) |
+| 4 | Message type | 0, 1, or 2 |
 
-#### Program Change
+Message types:
+- 0: Write to a slot
+- 1: Read from a slot
+- 2: System parameter set
+- 3: System parameter get
 
-| Byte | Description    | Range |
-|------|----------------|-------|
-| 4    | Message type | 0x00 (Program Change) |
-| 5    | Preset to modify | [0, 127] |
-| 6    | Slot to modify | [0, 16] |
-| 7    | Trigger  |  0x00 for preset entry, 0x01 for preset exit, 0x02 for switch short press, 0x03 for switch long press |
-| 8    | Switch number and type (if trigger is 0x01 or 0x02). The left nybble is the switch number [0, 16], and the right nybble is the type (0x0 for momentary, 0x1 for toggle) | [0, 256] |
-| 9   | MIDI channel   | [0, 15] |
-| 10   | Program number | [0, 127] |
+#### Message Data
 
-#### Control Change
+The data is the rest of the message. There are 3 types of messages: write to a slot, read from a slot, and system parameter set. Each message has a different format.
 
-Control change messages are called when bit 9 of the bookkeeping byte is set to 0x01. 
+#### Write to a Slot
 
-| Byte | Description    | Range |
-|------|----------------|-------|
-| 4    | Message type | 0x01 (Control Change) |
-| 5    | Preset to modify | [0, 127] |
-| 6    | Slot to modify | [0, 16] |
-| 7    | Trigger  |  0x00 for preset entry, 0x01 for preset exit, 0x02 for switch short press, 0x03 for switch long press |
-| 8    | Switch number and type (if trigger is 0x01 or 0x02). The left nybble is the switch number [0, 16], and the right nybble is the type (0x0 for momentary, 0x1 for toggle) | [0, 256] |
-| 9   | MIDI channel   | [0, 15] |
-| 10   | Control number | [0, 127] |
-| 11  | Control value  | [0, 127] |
+| Byte | Description    |
+|------|----------------|
+| 5    | Preset to modify |
+| 6    | Slot to modify |
+| 7    | Trigger  |  
+| 8    | Action |
+| 9    | Switch number |  
+| 10   | MIDI channel   |
+| 11   | Data 1 |
+| 12   | Data 2 |
+| 13   | Data 3 |
 
-#### Program Get
+```c++
+/*
+  Action type
+  8 bits
+*/
+enum Action
+{
+  ControlChange = 1,
+  ProgramChange = 2,
+  PresetUp = 3,   // on stegosaurus
+  PresetDown = 4, // on stegosaurus
+};
 
-This message is used to get the current information for a preset. This is useful for updating the interface with the current state of the controller.
+/*
+  Trigger type
+  4 bits
+*/
+enum Trigger
+{
+  EnterPreset = 1,
+  ExitPreset = 2,
+  ShortPress = 3,
+  LongPress = 4,
+  DoublePress = 5,
+};
 
-| Byte | Description    | Range |
-|------|----------------|-------|
-| 4    | Message type | 0x02 (Program Get) |
-| 5    | Preset to get | [0, 127] |
+/*
+  Switch number
+  4 bits
+*/
+// DO NOT CHANGE THESE VALUES. They must climb and start from 0
+enum Switch
+{
+  SWA = 0, // DON'T CHANGE
+  SWB = 1, // DON'T CHANGE
+  SWC = 2, // DON'T CHANGE
+  SWD = 3, // DON'T CHANGE
+};
+```
 
-The data returned will be in the following format:
+Data 1, Data 2, Data 3 
 
+This message will write the data to the specified slot in the specified preset. 
 
-#### Variable Get/Set
+#### Read from a Slot
 
-This message is used to set a variable in the controller. This is useful for setting things like the LED brightness or the MIDI channel.
-By convention, for boolean variables, a value of 0 is false and a value of 127 is true. This is done because the MIDI protocol for CC and PC messages only allows for values between 0 and 127.
+| Byte | Description    |
+|------|----------------|
+| 5    | Preset to read |
+| 6    | Slot to read |
 
-| Byte | Description    | Range |
-|------|----------------|-------|
-| 4    | Message type | 0x03 (Variable Set) / 0x04 (Variable Get) |
-| 5    | Variable name | [0, ] |
-| 6    | Value | [0, 127] |
+This returns the data from the specified slot in the specified preset in the same format as the write message.
 
-**Table of variable names and value ranges**
+#### System Parameter Set
 
-| Variable # | Variable Name | Value Range | Description |
-|------------|---------------|-------------|-------------|
-| 0x00       | LED Brightness | [0, 127] | Brightness of the LEDs |
-| 0x01       | MIDI Channel | [0, 15] | MIDI channel for the controller |
-| 0x02       | MIDI Thru | [0, 127] | MIDI Thru setting |
+| Byte | Description    |
+|------|----------------|
+| 5    | Parameter to set |
+| 6    | Value to set |
 
+This sets a system parameter. The parameters are as follows:
 
-## Pico Notes
+```c++
+enum SystemParams
+{
+  CurrentPreset = 0, // the current preset
+};
+```
 
-
-## TRASH
-
-#### Teensy 4.0
-
-[DEPRECATED]
-
-This is currently built on a Teensy 4.0. It should also work with any ATMega32U4 board, such as the Arduino Micro, HOWEVER, the USB name on the Micro will show up as just "Arduino Micro". The firmware is written in C++ and uses the Arduino framework. 
-Make sure you have the arduino IDE installed, and the Teensyduino add-on. See the [Teensyduino](https://www.pjrc.com/teensy/td_download.html) page for more information. The following libraries are required:
-
-- [Arduino MIDI Library](https://github.com/FortySevenEffects/arduino_midi_library) (@v5.0.2)
-- [Arduino USBMIDI](https://github.com/lathoub/Arduino-USBMIDI) (@v1.1.2)
-- [EasyButton](https://github.com/evert-arias/EasyButton) (@v2.0.3)
-
-You'll need to change the USB type to "Serial + MIDI" in the Arduino IDE. This is done by going to `Tools > USB Type` and selecting "Serial + MIDI".

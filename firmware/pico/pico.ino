@@ -24,11 +24,14 @@
 #define PULLUP true
 #define DEBOUNCE 40
 
-// pins
+// Switches
+#define NUM_SWITCHES 4
 #define SWITCH_1_PIN 10
 #define SWITCH_2_PIN 11
 #define SWITCH_3_PIN 12
 #define SWITCH_4_PIN 13
+
+// LED Builtin
 #define LED_PIN 13
 
 // memory settings
@@ -45,6 +48,8 @@
 #define MOMENTARY 0
 #define LATCH 1
 
+// hardcoded midi values
+#define ALL_CHANNELS 16
 #define NA 0 // switch to 0xFF?
 
 /*
@@ -53,7 +58,7 @@ ALL BIT LOGIC IS INDEXED FROM LEFT TO RIGHT
 
 // main storage
 // first slot may look like [32, 0, ...] - switch type (bit in order) latching, switch state (for latching),
-// first slot holds metadata for preset
+// first slot holds metadata for preset - EXPLORE IN DOCS
 byte MEMORY[NUM_PRESETS][SLOTS_PER_PRESET][BYTES_PER_SLOT]; // NUM_PRESETS presets, SLOTS_PER_PRESET slots, bytes each
 
 // the main memory is never modified, only copied from and to
@@ -72,10 +77,10 @@ byte CURRENT_PRESET = 0;
 */
 enum Action
 {
-  ControlChange = 0x01,
-  ProgramChange = 0x02,
-  PresetUp = 0x03,   // on stegosaurus
-  PresetDown = 0x04, // on stegosaurus
+  ControlChange = 1,
+  ProgramChange = 2,
+  PresetUp = 3,   // on stegosaurus
+  PresetDown = 4, // on stegosaurus
 };
 
 /*
@@ -84,11 +89,11 @@ enum Action
 */
 enum Trigger
 {
-  EnterPreset = 0x1,
-  ExitPreset = 0x2,
-  ShortPress = 0x3,
-  LongPress = 0x4,
-  DoublePress = 0x5,
+  EnterPreset = 1,
+  ExitPreset = 2,
+  ShortPress = 3,
+  LongPress = 4,
+  DoublePress = 5,
 };
 
 /*
@@ -104,8 +109,21 @@ enum Switch
   SWD = 3, // DON'T CHANGE
 };
 
+enum MsgTypes
+{
+  SetSlot = 0,        // set a slot - this will call writeSlot
+  GetSlot = 1,        // get a slot - this will call readSlot
+  SetSystemParam = 2, // set a system param
+  GetSystemParam = 3, // get a system param
+};
+
+enum SystemParams
+{
+  CurrentPreset = 0, // the current preset
+};
+
 // declare defaults
-void writeSlot(byte slot, byte msgType, byte trigger, byte switchNum, byte channel, byte data1 = NA, byte data2 = NA, byte data3 = NA);
+void writeSlot(byte slot, byte trigger, byte action, byte switchNum, byte channel, byte data1 = NA, byte data2 = NA, byte data3 = NA);
 
 // switchs
 EasyButton switch1(SWITCH_1_PIN, DEBOUNCE, PULLUP, true);
@@ -180,7 +198,8 @@ void setup()
   switch3.begin();
   switch4.begin();
 
-  // while (!Serial) ; // wait for serial port to connect. Needed for native USB
+  while (!Serial)
+    ; // wait for serial port to connect. Needed for native USB
 
   // ------------------- set up memory -------------------
   // set all memory to 0
@@ -189,7 +208,8 @@ void setup()
   // populate memory with some defaults
   for (int p = 0; p < NUM_PRESETS; p++)
   {
-    setCurrentPreset(p);
+    // this enables the temporary memory to be used
+    setCurrentPreset(p); // set current preset
 
     // set switch types
     setSwitchType(Switch::SWD, LATCH);
@@ -198,12 +218,11 @@ void setup()
     setSwitchState(Switch::SWD, 1);
 
     // set midi slots
-    writeSlot(1, Action::PresetDown, Trigger::ShortPress, Switch::SWA, NA, NA, NA, NA);   // stego preset
-    writeSlot(2, Action::PresetUp, Trigger::ShortPress, Switch::SWB, NA, NA, NA, NA);     // stego preset
-    writeSlot(3, Action::ProgramChange, Trigger::EnterPreset, NA, 15, p, NA, NA);         // hx preset
-    writeSlot(4, Action::ControlChange, Trigger::ShortPress, Switch::SWC, 15, 69, 8, NA); // hx snapshot down
-    // writeSlot(p, 5, Action::ControlChange, Trigger::ShortPress, Switch::SWD, 15, 69, 9, NA);  // hx snapshot up
-    writeSlot(5, Action::ControlChange, Trigger::ShortPress, Switch::SWD, 15, 74, 127, 0); // latch test
+    writeSlot(1, Trigger::ShortPress, Action::PresetDown, Switch::SWA, NA, NA, NA, NA);    // stego preset
+    writeSlot(2, Trigger::ShortPress, Action::PresetUp, Switch::SWB, NA, NA, NA, NA);      // stego preset
+    writeSlot(3, Trigger::EnterPreset, Action::ProgramChange, NA, 15, p, NA, NA);          // hx preset
+    writeSlot(4, Trigger::ShortPress, Action::ControlChange, Switch::SWC, 15, 69, 8, NA);  // hx snapshot down
+    writeSlot(5, Trigger::ShortPress, Action::ControlChange, Switch::SWD, 15, 74, 127, 0); // latch test
     savePreset(p);
   }
   loadPreset(CURRENT_PRESET);
@@ -248,9 +267,12 @@ void switch4Pressed()
   executeSwitchAction(Trigger::ShortPress, Switch::SWD);
 }
 
-/*
-Using CURRENT_PRESET, execute the action for the switchNum
-*/
+/**
+ * @brief Execute a switch action given a trigger and switch number
+ *
+ * @param trigger
+ * @param switchNum
+ */
 void executeSwitchAction(Trigger trigger, byte switchNum)
 {
   if (getSwitchType(switchNum) == LATCH)
@@ -267,8 +289,8 @@ void executeSwitchAction(Trigger trigger, byte switchNum)
   for (int i = 1; i < SLOTS_PER_PRESET; i++)
   {
     // read the preset
-    byte msgType, slotTrigger, slotSwitchNum, channel, data1, data2, data3;
-    readSlot(i, &msgType, &slotTrigger, &slotSwitchNum, &channel, &data1, &data2, &data3);
+    byte slotTrigger, action, slotSwitchNum, channel, data1, data2, data3;
+    readSlot(i, &slotTrigger, &action, &slotSwitchNum, &channel, &data1, &data2, &data3);
 
     // check if type is latch
     if (slotTrigger == trigger && slotSwitchNum == switchNum)
@@ -276,27 +298,44 @@ void executeSwitchAction(Trigger trigger, byte switchNum)
       {
         // check switch state and execute
         if (getSwitchState(switchNum) == 0)
-          action(msgType, channel, data1, data2); // data2 is the value to latch to
+          executeAction(action, channel, data1, data2); // data2 is the value to latch to
         else
-          action(msgType, channel, data1, data3); // data3 is the value to return to
+          executeAction(action, channel, data1, data3); // data3 is the value to return to
       }
       // if momentary, just execute
       else
-        action(msgType, channel, data1, data2);
+        executeAction(action, channel, data1, data2);
   }
 }
 
+/**
+ * @brief On receiving control change message
+ *
+ * @param channel
+ * @param number
+ * @param value
+ */
 static void onControlChange(byte channel, byte number, byte value)
 {
   xprintf("ControlChange from channel: %d, number: %d, value: %d\n", channel, number, value);
 }
 
+/**
+ * @brief On receiving program change message
+ *
+ * @param channel
+ * @param number
+ */
 static void onProgramChange(byte channel, byte number)
 {
   xprintf("ProgramChange from channel: %d, number: %d\n", channel, number);
 }
 
-// echo all messages over usb
+/**
+ * @brief on receiving a message from USB
+ *
+ * @param message
+ */
 static void onMessageUSB(const MidiMessage &message)
 {
   // xprintf("USB: ");
@@ -305,7 +344,11 @@ static void onMessageUSB(const MidiMessage &message)
     MIDICoreSerial.send(message);
 }
 
-// send midi thru
+/**
+ * @brief on receiving a message from serial
+ *
+ * @param message
+ */
 static void onMessageSerial(const MidiMessage &message)
 {
   // xprintf("Serial: ");
@@ -314,6 +357,13 @@ static void onMessageSerial(const MidiMessage &message)
     MIDICoreSerial.send(message);
 }
 
+/**
+ * @brief Semd a control change message
+ *
+ * @param channel
+ * @param number
+ * @param value
+ */
 static void sendControlChange(byte channel, byte number, byte value)
 {
   xprintf("OUT: ControlChange: CH %d, CC %d, VAL %d\n", channel, number, value);
@@ -334,25 +384,46 @@ static void sendProgramChange(byte channel, byte number)
  * @brief Write a slot to the current preset memory
  *  The first slot is reserved for metadata.
  * @param slot
- * @param msgType
  * @param trigger
+ * @param action
  * @param switchNum
  * @param channel
  * @param data1
  * @param data2
  * @param data3
  */
-void writeSlot(byte slot, byte msgType, byte trigger, byte switchNum, byte channel, byte data1, byte data2, byte data3)
+void writeSlot(byte slot, byte trigger, byte action, byte switchNum, byte channel, byte data1, byte data2, byte data3)
 {
+  // validation
   if (slot == META_SLOT)
   {
     xprintf("Slot %d is reserved for preset metadata!\n", slot);
     return;
   }
+  if (slot >= SLOTS_PER_PRESET)
+  {
+    xprintf("Slot %d is out of bounds!\n", slot);
+    return;
+  }
+  if (channel > ALL_CHANNELS)
+  {
+    xprintf("Channel %d is out of bounds!\n", channel);
+    return;
+  }
+  if (switchNum >= NUM_SWITCHES)
+  {
+    xprintf("Switch %d is out of bounds!\n", switchNum);
+    return;
+  }
+  if (data1 > 127 || data2 > 127 || data3 > 127)
+  {
+    xprintf("Data is out of bounds!\n");
+    return;
+  }
 
   // write to memory
-  CURRENT_PRESET_MEMORY[slot][0] = msgType;
-  CURRENT_PRESET_MEMORY[slot][1] = trigger;
+  CURRENT_PRESET_MEMORY[slot][0] = trigger;
+  CURRENT_PRESET_MEMORY[slot][1] = action;
   CURRENT_PRESET_MEMORY[slot][2] = switchNum;
   CURRENT_PRESET_MEMORY[slot][3] = channel;
   CURRENT_PRESET_MEMORY[slot][4] = data1;
@@ -360,20 +431,24 @@ void writeSlot(byte slot, byte msgType, byte trigger, byte switchNum, byte chann
   CURRENT_PRESET_MEMORY[slot][6] = data3;
 }
 
-// write switch states (momentary or latch) to memory
-// updateSwitchState (for momentary)
-/*
-Set the switch states for a preset
-This is encoded as a byte, with each bit representing a switch type.
-0 = momentary, 1 = latch.
-This is enoded from LEFT to RIGHT, so SWA is the leftmost bit.
-For example, 0b00100000 would mean that SWC is a latch switch, and the rest are momentary.
-*/
+/**
+ * @brief Set the Switch Types
+ * Set the switch states for a preset
+ * This is encoded as a byte, with each bit representing a switch type.
+ * 0 = momentary, 1 = latch. This is enoded from LEFT to RIGHT, so SWA is the leftmost bit.
+ * For example, 0b00100000 would mean that SWC is a latch switch, and the rest are momentary.
+ * @param types
+ */
 void setSwitchTypes(byte types)
 {
   CURRENT_PRESET_MEMORY[META_SLOT][SW_TYPE_BYTE] = types; // first byte of first slot is switch types
 }
 
+/**
+ * @brief Get the Switch Types
+ * See the setSwitchTypes function for more information
+ * @return byte
+ */
 byte getSwitchTypes()
 {
   return CURRENT_PRESET_MEMORY[META_SLOT][SW_TYPE_BYTE];
@@ -385,6 +460,15 @@ It's encoded from LEFT to RIGHT, so SWA is the leftmost bit.
 For example, 0b10000000 would mean that SWA is HIGH.
 This is only used for latch switches, momentary switches are always LOW in this byte.
 */
+
+/**
+ * @brief Set the Switch States byte
+ * This is encoded as a byte, with each bit representing a switch state.
+ * It's encoded from LEFT to RIGHT, so SWA is the leftmost bit.
+ * For example, 0b10000000 would mean that SWA is HIGH.
+ * This is only used for latch switches, momentary switches are always LOW in this byte.
+ * @param states
+ */
 void setSwitchStates(byte states)
 {
   // check validity of data against switch types
@@ -400,61 +484,89 @@ void setSwitchStates(byte states)
   CURRENT_PRESET_MEMORY[META_SLOT][SW_STATE_BYTE] = states; // second byte of first slot is switch states
 }
 
+/**
+ * @brief Get the Switch States byte
+ * This is encoded as a byte, with each bit representing a switch state.
+ * It's encoded from LEFT to RIGHT, so SWA is the leftmost bit.
+ * For example, 0b10000000 would mean that SWA is HIGH.
+ * This is only used for latch switches, momentary switches are always LOW in this byte.
+ * @return byte
+ */
 byte getSwitchStates()
 {
   return CURRENT_PRESET_MEMORY[META_SLOT][SW_STATE_BYTE];
 }
 
-/*
-Update a single switch tyoe for a preset
-Example: setSwitchType(0, Switch:SWA, LATCH) would set SWA to latch.
-*/
+/**
+ * @brief Set the Switch Type object
+ * Update a single switch tyoe for a preset
+ * Example: setSwitchType(0, Switch:SWA, LATCH) would set SWA to latch.
+ * @param switchNum
+ * @param type
+ */
 void setSwitchType(byte switchNum, byte type)
 {
   setBit(CURRENT_PRESET_MEMORY[META_SLOT][SW_TYPE_BYTE], switchNum, type);
-} /*
- Get the switch type for a specific switch in a preset
- Example: getSwitchType(0, Switch::SWA) would return LATCH if SWA is a latch switch.
+}
+
+/**
+ * @brief Get the Switch Type for a specific switch in a preset
+ * Example: getSwitchType(0, Switch::SWA) would return LATCH if SWA is a latch switch.
+ * @param switchNum
+ * @return byte
  */
 byte getSwitchType(byte switchNum)
 {
   return isBitSet(CURRENT_PRESET_MEMORY[META_SLOT][SW_TYPE_BYTE], switchNum);
 }
 
-/*
-Set a single switch state for a preset.
-Example: setSwitchState(0, Switch:SWA, 1) would set SWA to HIGH.
-*/
+/**
+ * @brief Set the Switch State object
+ * Example: setSwitchState(0, Switch:SWA, 1) would set SWA to HIGH.
+ * @param switchNum
+ * @param state
+ */
 void setSwitchState(byte switchNum, byte state)
 {
   setBit(CURRENT_PRESET_MEMORY[META_SLOT][SW_STATE_BYTE], switchNum, state);
 }
 
-/*
-Get the switch state for a specific switch in a preset
-Example: getSwitchState(0, Switch::SWA) would return 1 if SWA is HIGH.
-*/
+/**
+ * @brief Get the Switch State object
+ * Example: getSwitchState(0, Switch::SWA) would return 1 if SWA is HIGH.
+ * @param switchNum
+ * @return byte
+ */
 byte getSwitchState(byte switchNum)
 {
   return isBitSet(CURRENT_PRESET_MEMORY[0][SW_STATE_BYTE], switchNum);
 }
 
-/*
-Reset all switch states to 0
-*/
+/**
+ * @brief Reset all switch states to 0
+ *
+ */
 void resetSwitchStates()
 {
   CURRENT_PRESET_MEMORY[META_SLOT][SW_STATE_BYTE] = 0; // second byte of first slot is switch states
 }
 
-/*
-Read a slot from current preset memory
-
-*/
-void readSlot(byte slot, byte *msgType, byte *trigger, byte *switchNum, byte *channel, byte *data1, byte *data2, byte *data3)
+/**
+ * @brief Read a slot from memory
+ * This reads from the current preset memory, not the main memory.
+ * @param slot
+ * @param trigger
+ * @param action
+ * @param switchNum
+ * @param channel
+ * @param data1
+ * @param data2
+ * @param data3
+ */
+void readSlot(byte slot, byte *trigger, byte *action, byte *switchNum, byte *channel, byte *data1, byte *data2, byte *data3)
 {
-  *msgType = CURRENT_PRESET_MEMORY[slot][0];
-  *trigger = CURRENT_PRESET_MEMORY[slot][1];
+  *trigger = CURRENT_PRESET_MEMORY[slot][0];
+  *action = CURRENT_PRESET_MEMORY[slot][1];
   *switchNum = CURRENT_PRESET_MEMORY[slot][2];
   *channel = CURRENT_PRESET_MEMORY[slot][3];
   *data1 = CURRENT_PRESET_MEMORY[slot][4];
@@ -462,23 +574,31 @@ void readSlot(byte slot, byte *msgType, byte *trigger, byte *switchNum, byte *ch
   *data3 = CURRENT_PRESET_MEMORY[slot][6];
 }
 
-/*
-Print a slot from memory
-*/
+/**
+ * @brief Print a slot from memory
+ * This reads from the main memory, not the current preset memory.
+ * @param preset
+ * @param slot
+ */
 void printSlot(byte preset, byte slot)
 {
-  byte msgType, trigger, switchNum, channel, data1, data2, data3;
-  readSlotFromMemory(preset, slot, &msgType, &trigger, &switchNum, &channel, &data1, &data2, &data3);
-  xprintf("Preset [%d][%d]: %d %d %d %d %d %d %d %d\n", preset, slot, msgType, trigger, switchNum, channel, data1, data2, data3);
+  byte trigger, action, switchNum, channel, data1, data2, data3;
+  readSlotFromMemory(preset, slot, &trigger, &action, &switchNum, &channel, &data1, &data2, &data3);
+  xprintf("Preset [%d][%d]: %d %d %d %d %d %d %d %d\n", preset, slot, action, trigger, switchNum, channel, data1, data2, data3);
 }
 
-/*
-Route to the correct action
-*/
-void action(byte msgType, byte channel, byte data1, byte data2)
+/**
+ * @brief Execute an action
+ * This is a wrapper for sending midi messages based on the action type in the slot.
+ * @param action
+ * @param channel
+ * @param data1
+ * @param data2
+ */
+void executeAction(byte action, byte channel, byte data1, byte data2)
 {
   // apply action
-  switch (msgType)
+  switch (action)
   {
   case Action::ControlChange:
     sendControlChange(channel, data1, data2);
@@ -497,9 +617,12 @@ void action(byte msgType, byte channel, byte data1, byte data2)
   }
 }
 
-/*
-Read a preset from memory
-*/
+/**
+ * @brief DEPRECATED: Read a preset from memory
+ * We don't use this anymore, as we have a current preset memory.
+ * @param preset
+ * @param data
+ */
 void readPresetFromMemory(byte preset, byte *data)
 {
   for (int i = 0; i < SLOTS_PER_PRESET; i++)
@@ -507,26 +630,47 @@ void readPresetFromMemory(byte preset, byte *data)
       data[i * BYTES_PER_SLOT + j] = MEMORY[preset][i][j];
 }
 
-// data is a 2d array, with each row being a slot
+/**
+ * @brief Copy a preset from main memory into a 2d array
+ * This is used to copy a preset from main memory into current preset memory.
+ * Data is a 2d array, with the first dimension being the slot, and the second dimension being the byte.
+ * @param preset
+ * @param data
+ */
 void copyPresetFromMemory(byte preset, byte data[SLOTS_PER_PRESET][BYTES_PER_SLOT])
 {
+  // validate
+  if (preset > NUM_PRESETS - 1)
+  {
+    xprintf("Preset OOB!\n");
+    return;
+  }
   for (int i = 0; i < SLOTS_PER_PRESET; i++)
     for (int j = 0; j < BYTES_PER_SLOT; j++)
       data[i][j] = MEMORY[preset][i][j];
 }
 
-/*
-Set the current preset memory - don't call anything
-*/
+/**
+ * @brief Set the CURRENT_PRESET state variable and copy the preset from main memory into current preset memory.
+ *
+ * @param preset
+ */
 void setCurrentPreset(byte preset)
 {
+  if (preset > NUM_PRESETS - 1)
+  {
+    xprintf("Preset OOB!\n");
+    return;
+  }
   CURRENT_PRESET = preset;
   copyPresetFromMemory(CURRENT_PRESET, CURRENT_PRESET_MEMORY);
 }
 
-/*
-Save current preset to main memory
-*/
+/**
+ * @brief Save the current preset memory to main memory
+ *
+ * @param preset
+ */
 void savePreset(byte preset)
 {
   // check bounds
@@ -542,13 +686,23 @@ void savePreset(byte preset)
       MEMORY[preset][i][j] = CURRENT_PRESET_MEMORY[i][j];
 }
 
-/*
-Read a slot from memory
-*/
-void readSlotFromMemory(byte preset, byte slot, byte *msgType, byte *trigger, byte *switchNum, byte *channel, byte *data1, byte *data2, byte *data3)
+/**
+ * @brief Read a slot from memory
+ * This reads from the main memory, not the current preset memory.
+ * @param preset
+ * @param slot
+ * @param trigger
+ * @param action
+ * @param switchNum
+ * @param channel
+ * @param data1
+ * @param data2
+ * @param data3
+ */
+void readSlotFromMemory(byte preset, byte slot, byte *trigger, byte *action, byte *switchNum, byte *channel, byte *data1, byte *data2, byte *data3)
 {
-  *msgType = MEMORY[preset][slot][0];
-  *trigger = MEMORY[preset][slot][1];
+  *trigger = MEMORY[preset][slot][0];
+  *action = MEMORY[preset][slot][1];
   *switchNum = MEMORY[preset][slot][2];
   *channel = MEMORY[preset][slot][3];
   *data1 = MEMORY[preset][slot][4];
@@ -556,9 +710,12 @@ void readSlotFromMemory(byte preset, byte slot, byte *msgType, byte *trigger, by
   *data3 = MEMORY[preset][slot][6];
 }
 
-/*
-Load preset from memory and apply required EnterPreset and ExitPreset actions
-*/
+/**
+ * @brief Load a preset from memory
+ * Apply EnterPreset and ExitPreset actions
+ * Reset latch switches
+ * @param preset
+ */
 void loadPreset(byte preset)
 {
   // savePreset(CURRENT_PRESET); // save current preset
@@ -572,14 +729,14 @@ void loadPreset(byte preset)
   // apply ExitPreset actions from CURRENT_PRESET
   for (int i = 1; i < SLOTS_PER_PRESET; i++)
   {
-    byte msgType, trigger, switchNum, channel, data1, data2, data3;
-    readSlot(i, &msgType, &trigger, &switchNum, &channel, &data1, &data2, &data3);
+    byte trigger, action, switchNum, channel, data1, data2, data3;
+    readSlot(i, &trigger, &action, &switchNum, &channel, &data1, &data2, &data3);
     if (trigger == Trigger::ExitPreset)
-      action(msgType, channel, data1, data2);
+      executeAction(action, channel, data1, data2);
 
     // apply latch off if switch is a latch and on
     if (getSwitchType(switchNum) == LATCH && getSwitchState(switchNum) == 1)
-      action(msgType, channel, data1, data3);
+      executeAction(action, channel, data1, data3);
   }
 
   // copy preset to current preset memory
@@ -592,20 +749,22 @@ void loadPreset(byte preset)
   // apply EnterPreset actions from CURRENT_PRESET
   for (int i = 1; i < SLOTS_PER_PRESET; i++)
   {
-    byte msgType, trigger, switchNum, channel, data1, data2, data3;
-    readSlot(i, &msgType, &trigger, &switchNum, &channel, &data1, &data2, &data3);
+    byte trigger, action, switchNum, channel, data1, data2, data3;
+    readSlot(i, &trigger, &action, &switchNum, &channel, &data1, &data2, &data3);
     if (trigger == Trigger::EnterPreset)
-      action(msgType, channel, data1, data2);
+      executeAction(action, channel, data1, data2);
 
     // apply latch on if switch is a latch and ON at start
     if (getSwitchType(switchNum) && getSwitchState(switchNum) == 1)
-      action(msgType, channel, data1, data2);
+      executeAction(action, channel, data1, data2);
   }
 }
 
-/*
-Print preset from memory, omitting empty slots
-*/
+/**
+ * @brief Print preset from main memory
+ * Omits empty slots
+ * @param preset
+ */
 void printPreset(byte preset)
 {
   xprintf("Preset %03d:", preset);
@@ -629,7 +788,7 @@ void printPreset(byte preset)
     byte copied[BYTES_PER_SLOT];
     // copy slot i from data into copied
     memcpy(copied, data[i], BYTES_PER_SLOT);
-    // check if msgType is NA
+    // check if action is NA
     if (copied[0] == NA)
       continue;
     xprintf("\n [%02d]: ", i);
@@ -646,69 +805,16 @@ void printPreset(byte preset)
   xprintf("\n");
 }
 
-/*
-Print an array of bytes in hex
-*/
-void printHexArray(const byte *data, unsigned int size)
-{
-  while (size > 0)
-  {
-    byte b = *data++;
-    if (b < 16)
-      Serial.print('0');
-    Serial.print(b, HEX);
-    if (size > 1)
-      Serial.print(' ');
-    size = size - 1;
-  }
-}
-
-/*
-Printf for arduino
-*/
-void xprintf(const char *format, ...)
-{
-  char buffer[256]; // or smaller or static &c.
-  va_list args;
-  va_start(args, format);
-  vsprintf(buffer, format, args);
-  va_end(args);
-  Serial.print(buffer);
-}
-
-void flashLed()
-{
-  digitalWrite(LED_PIN, HIGH);
-  delay(100);
-  digitalWrite(LED_PIN, LOW);
-}
-
-byte leftNybble(const byte b)
-{
-  return b >> 4;
-}
-
-byte rightNybble(const byte b)
-{
-  return b & 0x0F;
-}
-
-byte randomByte(byte min, byte max)
-{
-  return random(min, max + 1);
-}
-
-void printBinaryByte(byte b)
-{
-  Serial.print("0b");
-  for (int i = 7; i >= 0; i--)
-  {
-    Serial.print(bitRead(b, i));
-  }
-}
-
 // sysex
 // -- message handlers --
+/**
+ * @brief Given a sysex byte array, check if it matches the vendor ID
+ * Example: checkVendor([0xF0 0x00 0x53 0x4D], 4) would return true
+ * @param data
+ * @param size
+ * @return true
+ * @return false
+ */
 bool checkVendor(const byte *data, unsigned int size)
 {
   if (size < 5) // if not long enough to contain the needed bytes, then it doesn't match
@@ -716,6 +822,12 @@ bool checkVendor(const byte *data, unsigned int size)
   return (*(data + 1) == 0x00 && *(data + 2) == MFID_1 && *(data + 3) == MFID_2);
 }
 
+/**
+ * @brief on receiving a system exclusive message
+ *
+ * @param data
+ * @param length
+ */
 static void onSystemExclusive(byte *data, unsigned int length)
 {
   // check last byte in msg - if it is F0, then more is coming
@@ -739,35 +851,141 @@ static void onSystemExclusive(byte *data, unsigned int length)
     Serial.println(F(" (tbc)"));
   }
 
-  // ExitPreset if not last bit
+  // check if the message is complete and process it
   if (last && checkVendor(data, length))
     parseSysExMessage(data, length);
-  else if (!checkVendor(data, length))
-  {
-    // do nothing
+  else if (!checkVendor(data, length)) // if it doesn't match the vendor ID
+  {                                    // do nothing
   }
   else
     Serial.println(F("Unexplained issue! The SysEx message is not getting processed"));
 }
 
+/**
+ * @brief Parse a sysex message
+ * This directs the message to the correct function based on the message type.
+ * @param data
+ * @param length
+ */
 static void parseSysExMessage(byte *data, unsigned int length)
 {
-  unsigned int start = 5;
-  int segmentLength = length - start;
-  /*
-  if (false)
+  // check message types
+  byte msgType = *(data + 4); // 5th byte is the message type
+
+  if (msgType == MsgTypes::SetSlot)
+  {
+    // check length
+    if (length != 15) // including the 0xF0 and 0xF7
+    {
+      xprintf("Invalid message length for SetSlot: %d\n", length);
+      return;
+    }
+
+    // get data
+    byte preset = *(data + 5);
+    byte slot = *(data + 6);
+    byte trigger = *(data + 7);
+    byte action = *(data + 8);
+    byte switchNum = *(data + 9);
+    byte channel = *(data + 10);
+    byte data1 = *(data + 11);
+    byte data2 = *(data + 12);
+    byte data3 = *(data + 13);
+
+    // write to memory
+    xprintf("SetSlot: %d %d %d %d %d %d %d %d %d\n", preset, slot, trigger, action, switchNum, channel, data1, data2, data3);
+    writeSlot(slot, trigger, action, switchNum, channel, data1, data2, data3);
+  }
+  else if (msgType == MsgTypes::GetSlot)
+  {
+  }
+  else if (msgType == MsgTypes::SetSystemParam)
+  {
+    byte param = *(data + 5);
+    byte value = *(data + 6);
+
+    if (param == SystemParams::CurrentPreset)
+    {
+      xprintf("SetSystemParam: CurrentPreset: %d\n", value);
+      setCurrentPreset(value);
+    }
+    else
+    {
+      xprintf("Unsupported system param: %d\n", param);
+    }
+  }
+  else if (msgType == MsgTypes::GetSystemParam)
   {
   }
   else
   {
-    Serial.print(F("Unsupported operation for segment length: "));
-    Serial.print(operation, HEX);
-    Serial.print(F(", length "));
-    Serial.println(segmentLength);
+    Serial.println(F("Unsupported message type"));
   }
-  */
 }
 
+// -- utility functions --
+
+/**
+ * @brief Print a byte array in hex
+ *
+ * @param data
+ * @param size
+ */
+void printHexArray(const byte *data, unsigned int size)
+{
+  while (size > 0)
+  {
+    byte b = *data++;
+    if (b < 16)
+      Serial.print('0');
+    Serial.print(b, HEX);
+    if (size > 1)
+      Serial.print(' ');
+    size = size - 1;
+  }
+}
+
+/**
+ * @brief Printf for Arduino Serial
+ *
+ * @param format
+ * @param ...
+ */
+void xprintf(const char *format, ...)
+{
+  char buffer[256]; // or smaller or static &c.
+  va_list args;
+  va_start(args, format);
+  vsprintf(buffer, format, args);
+  va_end(args);
+  Serial.print(buffer);
+}
+
+/**
+ * @brief Get a random byte between min and max
+ *
+ * @param min
+ * @param max
+ * @return byte
+ */
+byte randomByte(byte min, byte max)
+{
+  return random(min, max + 1);
+}
+
+/**
+ * @brief Print a byte in binary
+ *
+ * @param b
+ */
+void printBinaryByte(byte b)
+{
+  Serial.print("0b");
+  for (int i = 7; i >= 0; i--)
+  {
+    Serial.print(bitRead(b, i));
+  }
+}
 // get bit at position pos from the left
 bool isBitSet(byte b, byte position)
 {

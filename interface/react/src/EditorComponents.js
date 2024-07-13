@@ -1,31 +1,20 @@
 import { WebMidi } from "webmidi";
 import React, { useState } from "react";
 import { AppContext } from "./util.js";
-import { sendSysexMessage } from "./MidiControl.js";
+import {
+  sendSaveSlotMessage,
+  sendSetSystemParamMessage,
+  sendSysexMessage,
+} from "./MidiControl.js";
 import App from "./App.js";
-
-const triggers = [
-  { name: "EnterPreset", value: 1, display: "Enter Preset" },
-  { name: "ExitPreset", value: 2, display: "Exit Preset" },
-  { name: "ShortPress", value: 3, display: "Short Press" },
-  { name: "LongPress", value: 4, display: "Long Press" },
-  { name: "DoublePress", value: 5, display: "Double Press" },
-];
-
-const actions = [
-  { name: "ControlChange", value: 1, display: "Control Change" },
-  { name: "ProgramChange", value: 2, display: "Program Change" },
-  { name: "PresetUp", value: 3, display: "Preset Up" },
-  { name: "PresetDown", value: 4, display: "Preset Down" },
-];
-
-const switches = [
-  { name: "SWA", value: 0, display: "Switch A" },
-  { name: "SWB", value: 1, display: "Switch B" },
-  { name: "SWC", value: 2, display: "Switch C" },
-  { name: "SWD", value: 3, display: "Switch D" },
-];
-
+import {
+  TRIGGERS,
+  ACTIONS,
+  SWITCHES,
+  MSG_TYPES,
+  EnumValue,
+  SYSTEM_PARAMS,
+} from "./Enums.js";
 /**
  * ADD
  * Dropdown for preset
@@ -37,9 +26,9 @@ const presets = [...Array(128)].map((_, index) => index);
 const midiValues = [...Array(128)].map((_, index) => index);
 
 export function Row({ slotNumber, presetNumber }) {
-  const [trigger, setTrigger] = useState(triggers[0].value);
-  const [action, setAction] = useState(actions[0].value);
-  const [switchNum, setSwitchNum] = useState(switches[0].value);
+  const [trigger, setTrigger] = useState(TRIGGERS[0].value);
+  const [action, setAction] = useState(ACTIONS[0].value);
+  const [switchNum, setSwitchNum] = useState(SWITCHES[0].value);
   const [channel, setChannel] = useState(channels[0]);
 
   const [data1, setData1] = useState(midiValues[0]);
@@ -62,7 +51,7 @@ export function Row({ slotNumber, presetNumber }) {
           setTrigger(e.target.value);
         }}
       >
-        {triggers.map((trigger, index) => (
+        {TRIGGERS.map((trigger, index) => (
           <option key={index} value={trigger.value}>
             {trigger.display}
           </option>
@@ -77,7 +66,7 @@ export function Row({ slotNumber, presetNumber }) {
           setAction(e.target.value);
         }}
       >
-        {actions.map((action, index) => (
+        {ACTIONS.map((action, index) => (
           <option key={index} value={action.value}>
             {action.display}
           </option>
@@ -92,7 +81,7 @@ export function Row({ slotNumber, presetNumber }) {
           setSwitchNum(e.target.value);
         }}
       >
-        {switches.map((switchNum, index) => (
+        {SWITCHES.map((switchNum, index) => (
           <option key={index} value={switchNum.value}>
             {switchNum.display}
           </option>
@@ -152,30 +141,23 @@ export function Row({ slotNumber, presetNumber }) {
       </select>
 
       <button
+        id="save-slot-button"
         type="button"
         onClick={(e) => {
-          const values = {
+          // send a sysex message to save the slot
+
+          console.log(`Saving slot ${slotNumber} for preset ${presetNumber}`);
+          sendSaveSlotMessage(
+            presetNumber,
+            slotNumber,
             trigger,
             action,
             channel,
             switchNum,
             data1,
             data2,
-            data3,
-          };
-
-          const byteArray = [
-            presetNumber,
-            slotNumber,
-            trigger,
-            action,
-            channel === "all" ? 0 : channel,
-            switchNum,
-            data1,
-            data2,
-            data3,
-          ];
-          sendSysexMessage(byteArray);
+            data3
+          );
         }}
       >
         Save
@@ -204,7 +186,13 @@ export function DropdownGroup() {
         <select
           id="select-preset"
           onChange={(e) => {
-            setPreset(e.target.value);
+            // send the new preset value to the device
+            const p = e.target.value;
+            setPreset(p);
+            sendSetSystemParamMessage(
+              EnumValue(SYSTEM_PARAMS, "CurrentPreset"),
+              p
+            );
           }}
         >
           {presets.map((preset, index) => (
@@ -225,7 +213,8 @@ export function DropdownGroup() {
         }}
       >
         {[...Array(16)].map((_, index) => (
-          <Row key={index} slotNumber={index} presetNumber={preset} />
+          // remember, slot 0 is metadata
+          <Row key={index} slotNumber={index + 1} presetNumber={preset} />
         ))}
       </div>
     </div>

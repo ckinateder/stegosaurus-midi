@@ -3,7 +3,7 @@ import { WebMidi } from "webmidi";
 import React, { useState } from "react";
 import { AppContext } from "./util.js";
 import { addListeners, sendMidiMessage } from "./MidiControl.js";
-import { DropdownGroup } from "./KevinDidThisOnVacation.js";
+import { DropdownGroup } from "./EditorComponents.js";
 
 function handleDeviceDropdownChange(e) {
   AppContext.input = WebMidi.getInputByName(e.target.value);
@@ -47,11 +47,6 @@ export default function App() {
         onChange={handleDeviceDropdownChange}
       />
       <DropdownGroup />
-      <h2>Monitor</h2>
-      <div id="monitor-container"></div>
-      <button id="send-button" onClick={sendMidiMessage}>
-        Send
-      </button>
     </div>
   );
 }
