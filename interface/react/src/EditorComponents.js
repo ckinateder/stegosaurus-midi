@@ -14,13 +14,10 @@ import {
   MSG_TYPES,
   EnumValue,
   SYSTEM_PARAMS,
+  ALL_CHANNELS,
 } from "./Enums.js";
-/**
- * ADD
- * Dropdown for preset
- */
 
-const channels = [...[...Array(16)].map((_, index) => index + 1), "all"];
+const channels = [...[...Array(16)].map((_, index) => index), "all"];
 const presets = [...Array(128)].map((_, index) => index);
 
 const midiValues = [...Array(128)].map((_, index) => index);
@@ -97,7 +94,9 @@ export function Row({ slotNumber, presetNumber }) {
         }}
       >
         {channels.map((channel, index) => (
-          <option key={index}>{channel}</option>
+          <option key={index} value={index != "all" ? index : 16}>
+            {channel}
+          </option>
         ))}
       </select>
 
@@ -152,8 +151,8 @@ export function Row({ slotNumber, presetNumber }) {
             slotNumber,
             trigger,
             action,
-            channel,
             switchNum,
+            channel,
             data1,
             data2,
             data3
@@ -200,6 +199,9 @@ export function DropdownGroup() {
             for (let i = 1; i <= 16; i++) {
               sendSysexMessage([getSlotVal, p, i]);
             }
+
+            // will need to update the slots with the new preset info.
+            // send props?
           }}
         >
           {presets.map((preset, index) => (

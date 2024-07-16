@@ -876,13 +876,9 @@ static void onSystemExclusive(byte *data, unsigned int length)
   xprintf("IN: SysEx (%d): ", length);
   printHexArray(data, length);
   if (last)
-  {
     Serial.println(F(" (end)"));
-  }
   else
-  {
     Serial.println(F(" (tbc)"));
-  }
 
   // check if the message is complete and process it
   if (last && checkVendor(data, length))
