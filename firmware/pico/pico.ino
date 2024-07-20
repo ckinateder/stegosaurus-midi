@@ -117,6 +117,8 @@ enum MsgTypes
   SetSystemParam = 3,       // set a system param
   GetSystemParam = 4,       // get a system param
   GetSystemParamReturn = 5, // return value from get system param
+  GetPreset = 6,            // get a preset
+  GetPresetReturn = 7,      // return value from get preset
 };
 
 enum SystemParams
@@ -163,9 +165,9 @@ void setup()
 
   // ------------------- set up connections -------------------
   // set names
-  USBDevice.setManufacturerDescriptor("CJK Devices");
-  USBDevice.setProductDescriptor("Stegosaurus (PICO)");
-  USB_MIDI_Transport.setStringDescriptor("Stegosaurus MIDI");
+  USBDevice.setManufacturerDescriptor(MANUFACTURER);
+  USBDevice.setProductDescriptor(PRODUCT);
+  USB_MIDI_Transport.setStringDescriptor(PRODUCT);
   // USB_MIDI_Transport.setCableName         (1, "Controller"); // set this if using multiple cable types
 
   // set handlers
@@ -968,6 +970,49 @@ static void parseSysExMessage(byte *data, unsigned int length)
   }
   else if (msgType == MsgTypes::GetSystemParam)
   {
+    byte param = *(data + 5);
+    xprintf("GetSystemParam: %d\n", param);
+
+    if (param == SystemParams::CurrentPreset)
+    {
+      byte paramInfo[3] = {
+          MsgTypes::GetSystemParamReturn,
+          SystemParams::CurrentPreset,
+          CURRENT_PRESET};
+
+      sendSystemExclusive(paramInfo, 7);
+    }
+    else
+    {
+      xprintf("Unsupported system param: %d\n", param);
+    }
+  }
+  else if (msgType == MsgTypes::GetPreset)
+  {
+    byte preset = *(data + 5);
+
+    // create one byte array to hold the entire preset
+    byte presetData[BYTES_PER_SLOT * SLOTS_PER_PRESET];
+    for (int i = 0; i < SLOTS_PER_PRESET; i++)
+    {
+      byte trigger, action, switchNum, channel, data1, data2, data3;
+      readSlotFromMemory(preset, i, &trigger, &action, &switchNum, &channel, &data1, &data2, &data3);
+      presetData[i * BYTES_PER_SLOT] = trigger;
+      presetData[i * BYTES_PER_SLOT + 1] = action;
+      presetData[i * BYTES_PER_SLOT + 2] = switchNum;
+      presetData[i * BYTES_PER_SLOT + 3] = channel;
+      presetData[i * BYTES_PER_SLOT + 4] = data1;
+      presetData[i * BYTES_PER_SLOT + 5] = data2;
+      presetData[i * BYTES_PER_SLOT + 6] = data3;
+    }
+    // now create an array with the message type and the preset data
+    byte presetInfo[BYTES_PER_SLOT * SLOTS_PER_PRESET + 2] = {MsgTypes::GetPresetReturn, preset};
+
+    // copy the preset data into the array
+    memcpy(presetInfo + 2, presetData, BYTES_PER_SLOT * SLOTS_PER_PRESET);
+
+    // send the message
+    sendSystemExclusive(presetInfo, BYTES_PER_SLOT * SLOTS_PER_PRESET + 2);
   }
   else
   {
@@ -1023,6 +1068,24 @@ void xprintf(const char *format, ...)
 byte randomByte(byte min, byte max)
 {
   return random(min, max + 1);
+}
+
+// hash the current timestamp into 8 bytes
+/**
+ * @brief This function hashes the current timestamp into 8 bytes
+ * For example, if the current decimal time (in milliseconds) is
+ * 1721176304894, it would return 00 00 01 90 BE 1A 2C FE. This
+ * helps to know which message is responding to which request.
+ * @param data
+ */
+void hashTimestamp(byte *data)
+{
+  unsigned long timestamp = millis();
+  for (int i = 0; i < 8; i++)
+  {
+    data[i] = timestamp & 0xFF;
+    timestamp >>= 8;
+  }
 }
 
 /**

@@ -32,6 +32,8 @@ export const MSG_TYPES = [
     value: 5,
     display: "Get System Param Return",
   },
+  { name: "GetPreset", value: 6, display: "Get Preset" },
+  { name: "GetPresetReturn", value: 7, display: "Get Preset Return" },
 ];
 
 export const SYSTEM_PARAMS = [

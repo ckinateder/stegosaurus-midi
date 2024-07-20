@@ -15,14 +15,14 @@ export function addListeners(selectedInput) {
     console.log(`Adding listeners for ${selectedInput.name}`);
     selectedInput.addListener("programchange", (e) => {
       //console.log(e);
-      const info = `PC @ chan ${e.target.number}: ${e.value}`;
+      const info = `IN PC @ chan ${e.target.number}: ${e.value}`;
       console.log(info);
     });
     selectedInput.addListener("controlchange", (e) => {
       //console.log(e);
       let number = e.data[1];
       let value = e.data[2];
-      const info = `CC @ chan ${e.target.number}: ${number} ${value}`;
+      const info = `IN CC @ chan ${e.target.number}: ${number} ${value}`;
       console.log(info);
     });
     selectedInput.addListener("sysex", (e) => {
@@ -86,4 +86,19 @@ export function sendSaveSlotMessage(
 export function sendSetSystemParamMessage(param, value) {
   const byteArray = [EnumValue(MSG_TYPES, "SetSystemParam"), param, value];
   sendSysexMessage(byteArray);
+}
+
+export function getPresetSlots(preset) {
+  const getSlotVal = EnumValue(MSG_TYPES, "GetSlot");
+  console.log(`Getting slots for preset ${preset}`);
+
+  sendSysexMessage([EnumValue(MSG_TYPES, "GetPreset"), preset]);
+
+  /*
+  for (let i = 1; i <= 16; i++) {
+    setTimeout(() => {
+      sendSysexMessage([getSlotVal, preset, i]);
+    }, 20);
+  }
+    */
 }

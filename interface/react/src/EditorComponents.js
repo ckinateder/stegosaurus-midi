@@ -2,6 +2,7 @@ import { WebMidi } from "webmidi";
 import React, { useState } from "react";
 import { AppContext } from "./util.js";
 import {
+  getPresetSlots,
   sendSaveSlotMessage,
   sendSetSystemParamMessage,
   sendSysexMessage,
@@ -194,11 +195,7 @@ export function DropdownGroup() {
             );
 
             // get the new preset's slots
-            const getSlotVal = EnumValue(MSG_TYPES, "GetSlot");
-            console.log(`Getting slots for preset ${p}`);
-            for (let i = 1; i <= 16; i++) {
-              sendSysexMessage([getSlotVal, p, i]);
-            }
+            getPresetSlots(p);
 
             // will need to update the slots with the new preset info.
             // send props?
