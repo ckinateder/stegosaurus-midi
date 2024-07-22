@@ -52,6 +52,10 @@
 #define ALL_CHANNELS 16
 #define NA 0 // switch to 0xFF?
 
+// system values
+#define TIMESTAMP_BYTES 4 // 4 bytes for timestamp
+const byte MFID_ARRAY[3] = {0x00, MFID_1, MFID_2};
+
 /*
 ALL BIT LOGIC IS INDEXED FROM LEFT TO RIGHT
 */
@@ -145,10 +149,15 @@ typedef Message<MIDI_NAMESPACE::DefaultSettings::SysExMaxSize> MidiMessage;
 // USB MIDI object, with 1 cable
 Adafruit_USBD_MIDI USB_MIDI_Transport(1);
 
-// Create a new instance of the Arduino MIDI Library,
-// and attach usb_midi as the transport.
-MIDI_CREATE_INSTANCE(Adafruit_USBD_MIDI, USB_MIDI_Transport, MIDICoreUSB);
-MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, MIDICoreSerial);
+// Create a MIDI object with custom settings
+// see https://github.com/FortySevenEffects/arduino_midi_library/blob/2d64cc3c2ff85bbee654a7054e36c59694d8d8e4/src/midi_Settings.h#L49-L102
+struct CustomSettings : public midi::DefaultSettings
+{
+  static const unsigned SysExMaxSize = 256; // Accept SysEx messages up to 256 bytes long.
+  static const int BaudRate = 115200;       // Set the baud rate to 31250.
+};
+MIDI_CREATE_CUSTOM_INSTANCE(Adafruit_USBD_MIDI, USB_MIDI_Transport, MIDICoreUSB, CustomSettings);
+MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial1, MIDICoreSerial, CustomSettings);
 
 void setup()
 {
@@ -321,7 +330,7 @@ void executeSwitchAction(Trigger trigger, byte switchNum)
  */
 static void onControlChange(byte channel, byte number, byte value)
 {
-  xprintf("ControlChange from channel: %d, number: %d, value: %d\n", channel, number, value);
+  xprintf("IN: CC: CH %d, CC %d, VAL %d\n", channel, number, value);
 }
 
 /**
@@ -332,7 +341,7 @@ static void onControlChange(byte channel, byte number, byte value)
  */
 static void onProgramChange(byte channel, byte number)
 {
-  xprintf("ProgramChange from channel: %d, number: %d\n", channel, number);
+  xprintf("IN: PC: CH %d, PC %d\n", channel, number);
 }
 
 /**
@@ -362,7 +371,7 @@ static void onMessageSerial(const MidiMessage &message)
 }
 
 /**
- * @brief Semd a control change message
+ * @brief Send a control change message
  *
  * @param channel
  * @param number
@@ -375,6 +384,12 @@ static void sendControlChange(byte channel, byte number, byte value)
   MIDICoreSerial.sendControlChange(number, value, channel);
 }
 
+/**
+ * @brief Send a program change message
+ *
+ * @param channel
+ * @param number
+ */
 static void sendProgramChange(byte channel, byte number)
 {
   xprintf("OUT: ProgramChange: CH %d, PC %d\n", channel, number);
@@ -382,18 +397,48 @@ static void sendProgramChange(byte channel, byte number)
   MIDICoreSerial.sendProgramChange(number, channel);
 }
 
-void sendSystemExclusive(byte *data, unsigned int length)
+/**
+ * @brief Send a system exclusive message
+ * This includes the MFID_ARRAY, the timestamp, and the F0 and F7 bytes.
+ * @param data
+ * @param length
+ * @param response - if true, then the message is a response to a request
+ */
+void sendSystemExclusive(byte *data, unsigned int length, bool response = false)
 {
-  // prepend MFID_ARRAY to data
-  unsigned int fullLength = length + 5;
-  byte fullData[fullLength];
-  fullData[0] = 0xF0;
-  fullData[1] = 0x00;
-  fullData[2] = MFID_1;
-  fullData[3] = MFID_2;
-  memcpy(fullData + 4, data, length);
-  fullData[length + 4] = 0xF7;
+  // calculate timestamp
+  byte timestamp[TIMESTAMP_BYTES];
+  makeTimestamp(timestamp);
+  xprintf("Timestamp: ");
+  printHexArray(timestamp, TIMESTAMP_BYTES);
+  xprintf("\n");
 
+  // calculate response byte
+  byte responseByte = response ? 0x01 : 0x00;
+
+  // calculate full length
+  unsigned int fullLength = length + 2 + 3 + TIMESTAMP_BYTES + 1; // 2 for end caps, 3 for MFID_ARRAY, 4 for timestamp, 1 for response
+  byte fullData[fullLength];
+
+  // start cap
+  fullData[0] = 0xF0;
+
+  // copy MFID_ARRAY to data
+  memcpy(fullData + 1, MFID_ARRAY, 3);
+
+  // copy timestamp
+  memcpy(fullData + 4, timestamp, TIMESTAMP_BYTES);
+
+  // copy response byte
+  fullData[8] = responseByte;
+
+  // copy data
+  memcpy(fullData + 9, data, length);
+
+  // end cap
+  fullData[fullLength - 1] = 0xF7;
+
+  // print
   xprintf("OUT: SysEx (%d): ", fullLength);
   printHexArray(fullData, fullLength);
   xprintf("\n");
@@ -951,7 +996,7 @@ static void parseSysExMessage(byte *data, unsigned int length)
         data2,
         data3};
 
-    sendSystemExclusive(slotInfo, 10);
+    sendSystemExclusive(slotInfo, 10, true); // true means it's a response
   }
   else if (msgType == MsgTypes::SetSystemParam)
   {
@@ -980,7 +1025,7 @@ static void parseSysExMessage(byte *data, unsigned int length)
           SystemParams::CurrentPreset,
           CURRENT_PRESET};
 
-      sendSystemExclusive(paramInfo, 7);
+      sendSystemExclusive(paramInfo, 7, true); // true means it's a response
     }
     else
     {
@@ -1012,7 +1057,7 @@ static void parseSysExMessage(byte *data, unsigned int length)
     memcpy(presetInfo + 2, presetData, BYTES_PER_SLOT * SLOTS_PER_PRESET);
 
     // send the message
-    sendSystemExclusive(presetInfo, BYTES_PER_SLOT * SLOTS_PER_PRESET + 2);
+    sendSystemExclusive(presetInfo, BYTES_PER_SLOT * SLOTS_PER_PRESET + 2, true);
   }
   else
   {
@@ -1070,21 +1115,22 @@ byte randomByte(byte min, byte max)
   return random(min, max + 1);
 }
 
-// hash the current timestamp into 8 bytes
 /**
- * @brief This function hashes the current timestamp into 8 bytes
- * For example, if the current decimal time (in milliseconds) is
- * 1721176304894, it would return 00 00 01 90 BE 1A 2C FE. This
- * helps to know which message is responding to which request.
+ * @brief This function copies the millis() value into a 4 byte array
+ * This is used to create a timestamp for the sysex messages.
+ * This can hold up to 49 days of time. After that, it will wrap around.
  * @param data
  */
-void hashTimestamp(byte *data)
+void makeTimestamp(byte *data)
 {
   unsigned long timestamp = millis();
-  for (int i = 0; i < 8; i++)
+
+  // wrap around after it goes higher than 256^TIMESTAMP_BYTES
+  timestamp = timestamp % (unsigned long)pow(256, TIMESTAMP_BYTES);
+
+  for (int i = 0; i < TIMESTAMP_BYTES; i++)
   {
-    data[i] = timestamp & 0xFF;
-    timestamp >>= 8;
+    data[i] = (timestamp >> (8 * (TIMESTAMP_BYTES - 1 - i))) & 0xFF;
   }
 }
 

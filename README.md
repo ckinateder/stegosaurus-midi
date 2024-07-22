@@ -84,6 +84,8 @@ Types of messages:
 - Program get
 - Variable set
 
+SysEx communication here follows a SYN/ACK-type protocol. Request -> Response -> ACK. The ACK is a 1-byte message that indicates that the message was received successfully.
+
 
 #### Header
 
