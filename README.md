@@ -95,9 +95,9 @@ SysEx communication here follows a SYN/ACK-type protocol. Request -> Response ->
 | 1 | Vendor ID | 0x00 (Three-byte Vendor ID) |
 | 2 | Vendor ID | 0x53 (Vendor ID) |
 | 3 | Vendor ID | 0x4D (Vendor ID) |
-| 4-9 | Timestamp | 6 bytes indicating the current datetime |
-| 10 | Response/Request* | 0 or 1|
-| 11 | Message type** | 0, 1, or 2 |
+| 4-7 | Message ID | Unique ID to ensure proper separation of messages |
+| 8 | Response/Request* | 0 or 1|
+| 9 | Message type** | 0, 1, or 2 |
 
 **\*Response/Request is 0 if the message is a request and 1 if it is a response.**
 
