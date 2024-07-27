@@ -53,7 +53,6 @@
 #define NA 0 // switch to 0xFF?
 
 // system values
-#define TIMESTAMP_BYTES 4 // 4 bytes for timestamp
 const byte MFID_ARRAY[3] = {0x00, MFID_1, MFID_2};
 
 /*
@@ -71,6 +70,9 @@ byte MEMORY[NUM_PRESETS][SLOTS_PER_PRESET][BYTES_PER_SLOT]; // NUM_PRESETS prese
 // if a preset is saved, the current preset memory is copied to the main memory
 byte CURRENT_PRESET_MEMORY[SLOTS_PER_PRESET][BYTES_PER_SLOT];
 byte CURRENT_PRESET = 0;
+
+// keep track of current message
+unsigned short CURRENT_MSG_ID = 0; // 2 bytes
 
 // enums
 // NONE of these can be 0
@@ -399,25 +401,18 @@ static void sendProgramChange(byte channel, byte number)
 
 /**
  * @brief Send a system exclusive message
- * This includes the MFID_ARRAY, the timestamp, and the F0 and F7 bytes.
+ * This includes the MFID_ARRAY, the message ID, and the F0 and F7 bytes.
  * @param data
  * @param length
  * @param response - if true, then the message is a response to a request
  */
-void sendSystemExclusive(byte *data, unsigned int length, bool response = false)
+void sendSystemExclusive(byte *data, unsigned int length, unsigned short msg_id, bool response = false)
 {
-  // calculate timestamp
-  byte timestamp[TIMESTAMP_BYTES];
-  makeTimestamp(timestamp);
-  xprintf("Timestamp: ");
-  printHexArray(timestamp, TIMESTAMP_BYTES);
-  xprintf("\n");
-
   // calculate response byte
   byte responseByte = response ? 0x01 : 0x00;
 
   // calculate full length
-  unsigned int fullLength = length + 2 + 3 + TIMESTAMP_BYTES + 1; // 2 for end caps, 3 for MFID_ARRAY, 4 for timestamp, 1 for response
+  unsigned int fullLength = length + 2 + 3 + 2 + 1; // 2 for end caps, 3 for MFID_ARRAY, 2 for msg id, 1 for response
   byte fullData[fullLength];
 
   // start cap
@@ -426,14 +421,21 @@ void sendSystemExclusive(byte *data, unsigned int length, bool response = false)
   // copy MFID_ARRAY to data
   memcpy(fullData + 1, MFID_ARRAY, 3);
 
-  // copy timestamp
-  memcpy(fullData + 4, timestamp, TIMESTAMP_BYTES);
+  // copy message ID
+  byte msgIdArray[2];
+
+  // convert to bytes
+  msgIdArray[0] = msg_id & 0xFF;
+  msgIdArray[1] = (msg_id >> 8) & 0xFF;
+
+  // copy to data
+  memcpy(fullData + 4, msgIdArray, 2);
 
   // copy response byte
-  fullData[8] = responseByte;
+  fullData[7] = responseByte;
 
   // copy data
-  memcpy(fullData + 9, data, length);
+  memcpy(fullData + 8, data, length);
 
   // end cap
   fullData[fullLength - 1] = 0xF7;
@@ -929,12 +931,36 @@ static void onSystemExclusive(byte *data, unsigned int length)
 
   // check if the message is complete and process it
   if (last && checkVendor(data, length))
+  {
+    if (length < 9) // if not long enough to contain the needed bytes, then it doesn't match
+    {
+      xprintf("Invalid message length: %d\n", length);
+      return;
+    }
     parseSysExMessage(data, length);
+  }
   else if (!checkVendor(data, length)) // if it doesn't match the vendor ID
   {                                    // do nothing
   }
   else
     Serial.println(F("Unexplained issue! The SysEx message is not getting processed"));
+}
+
+/**
+ * @brief Parse the header of a sysex message
+ * This extracts the message ID, response byte, and message type.
+ * This does not check the vendor ID.
+ *
+ * @param data
+ * @param msg_id
+ * @param response
+ * @param msgType
+ */
+void parseHeaderBrief(byte *data, unsigned short *msgId, bool *response, byte *msgType)
+{
+  *msgId = data[4] + (data[5] << 8);
+  *response = data[7];
+  *msgType = data[8];
 }
 
 /**
@@ -945,9 +971,16 @@ static void onSystemExclusive(byte *data, unsigned int length)
  */
 static void parseSysExMessage(byte *data, unsigned int length)
 {
-  // check message types
-  byte msgType = *(data + 4); // 5th byte is the message type
+  // parse header
+  unsigned short msgId;
+  bool response;
+  byte msgType;
+  parseHeaderBrief(data, &msgId, &response, &msgType);
 
+  // get address of the data + 9
+  byte *meat = data + 9;
+
+  // check message types
   if (msgType == MsgTypes::SetSlot)
   {
     // check length
@@ -958,25 +991,28 @@ static void parseSysExMessage(byte *data, unsigned int length)
     }
 
     // get data
-    byte preset = *(data + 5);
-    byte slot = *(data + 6);
-    byte trigger = *(data + 7);
-    byte action = *(data + 8);
-    byte switchNum = *(data + 9);
-    byte channel = *(data + 10);
-    byte data1 = *(data + 11);
-    byte data2 = *(data + 12);
-    byte data3 = *(data + 13);
+    byte preset = *(meat);
+    byte slot = *(meat + 1);
+    byte trigger = *(meat + 2);
+    byte action = *(meat + 3);
+    byte switchNum = *(meat + 4);
+    byte channel = *(meat + 5);
+    byte data1 = *(meat + 6);
+    byte data2 = *(meat + 7);
+    byte data3 = *(meat + 8);
 
     // write to memory
     xprintf("SetSlot: %d %d %d %d %d %d %d %d %d\n", preset, slot, trigger, action, switchNum, channel, data1, data2, data3);
     writeSlot(slot, trigger, action, switchNum, channel, data1, data2, data3);
     savePreset();
+
+    // send affirmative response
   }
   else if (msgType == MsgTypes::GetSlot)
   {
-    byte preset = *(data + 5);
-    byte slot = *(data + 6);
+    // parse header
+    byte preset = *(meat);
+    byte slot = *(meat + 1);
     xprintf("GetSlot: Preset %d, Slot %d\n", preset, slot);
 
     // read from memory
@@ -1000,8 +1036,8 @@ static void parseSysExMessage(byte *data, unsigned int length)
   }
   else if (msgType == MsgTypes::SetSystemParam)
   {
-    byte param = *(data + 5);
-    byte value = *(data + 6);
+    byte param = *(meat);
+    byte value = *(meat + 1);
 
     if (param == SystemParams::CurrentPreset)
     {
@@ -1015,7 +1051,7 @@ static void parseSysExMessage(byte *data, unsigned int length)
   }
   else if (msgType == MsgTypes::GetSystemParam)
   {
-    byte param = *(data + 5);
+    byte param = *(meat);
     xprintf("GetSystemParam: %d\n", param);
 
     if (param == SystemParams::CurrentPreset)
@@ -1034,7 +1070,7 @@ static void parseSysExMessage(byte *data, unsigned int length)
   }
   else if (msgType == MsgTypes::GetPreset)
   {
-    byte preset = *(data + 5);
+    byte preset = *(meat);
 
     // create one byte array to hold the entire preset
     byte presetData[BYTES_PER_SLOT * SLOTS_PER_PRESET];
@@ -1120,7 +1156,6 @@ byte randomByte(byte min, byte max)
  * This is used to create a timestamp for the sysex messages.
  * This can hold up to 49 days of time. After that, it will wrap around.
  * @param data
- */
 void makeTimestamp(byte *data)
 {
   unsigned long timestamp = millis();
@@ -1133,6 +1168,7 @@ void makeTimestamp(byte *data)
     data[i] = (timestamp >> (8 * (TIMESTAMP_BYTES - 1 - i))) & 0xFF;
   }
 }
+ */
 
 /**
  * @brief Print a byte in binary
