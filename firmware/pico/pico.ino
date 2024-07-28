@@ -118,14 +118,11 @@ enum Switch
 
 enum MsgTypes
 {
-  SetSlot = 0,              // set a slot - this will call writeSlot
-  GetSlot = 1,              // get a slot - this will call readSlot
-  GetSlotReturn = 2,        // return value from get slot
-  SetSystemParam = 3,       // set a system param
-  GetSystemParam = 4,       // get a system param
-  GetSystemParamReturn = 5, // return value from get system param
-  GetPreset = 6,            // get a preset
-  GetPresetReturn = 7,      // return value from get preset
+  SetSlot = 0,        // set a slot - this will call writeSlot
+  GetSlot = 1,        // get a slot - this will call readSlot
+  SetSystemParam = 2, // set a system param
+  GetSystemParam = 3, // get a system param
+  GetPreset = 4,      // get a preset
 };
 
 enum SystemParams
@@ -133,11 +130,11 @@ enum SystemParams
   CurrentPreset = 0, // the current preset
 };
 
-enum Attitude
+enum Condition
 {
   Request = 0,
-  Response = 1,
-  Ack = 2,
+  ResponseOk = 1,
+  ResponseError = 2,
 };
 
 // declare defaults
@@ -904,12 +901,14 @@ static void onSystemExclusive(byte *data, unsigned int length)
 
 /**
  * @brief Send a system exclusive message
- * This includes the MFID_ARRAY, the message ID, and the F0 and F7 bytes.
+ * This includes the MFID_ARRAY, the message ID, condition, and the F0 and F7 bytes.
+ * For example: sendSystemExclusive([0x01, 0x02, 0x03], 3, 0x1234, 0x01) would send F0 00 53 4D 12 34 01 01 02 03 F7
  * @param data
  * @param length
- * @param attitude
+ * @param msg_id
+ * @param condition
  */
-void sendSystemExclusive(byte *data, unsigned int length, unsigned short msg_id, byte attitude)
+void sendSystemExclusive(byte *data, unsigned int length, unsigned short msg_id, byte condition)
 {
   // calculate full length
   unsigned int fullLength = length + 2 + 3 + 2 + 1; // 2 for end caps, 3 for MFID_ARRAY, 2 for msg id, 1 for attitude
@@ -931,8 +930,8 @@ void sendSystemExclusive(byte *data, unsigned int length, unsigned short msg_id,
   // copy to data
   memcpy(fullData + 4, msgIdArray, 2);
 
-  // copy attitude byte
-  fullData[6] = attitude;
+  // copy condition byte
+  fullData[6] = condition;
 
   // copy data
   memcpy(fullData + 7, data, length);
@@ -950,6 +949,30 @@ void sendSystemExclusive(byte *data, unsigned int length, unsigned short msg_id,
   MIDICoreUSB.sendSysEx(fullLength, fullData, true);
   MIDICoreSerial.sendSysEx(fullLength, fullData, true);
 }
+
+/**
+ * @brief Send an affirmative response
+ * This is a response to a message that was received and processed successfully.
+ * @param msgId
+ * @param msgType
+ */
+void sendAffirmativeResponse(unsigned short msgId, byte msgType)
+{
+  byte response[1] = {msgType};
+  sendSystemExclusive(response, 1, msgId, Condition::ResponseOk);
+}
+
+/**
+ * @brief This is a response to a message that was received and processed unsuccessfully.
+ * @param msgId
+ * @param msgType
+ */
+void sendErrorResponse(unsigned short msgId, byte msgType)
+{
+  byte response[1] = {msgType};
+  sendSystemExclusive(response, 1, msgId, Condition::ResponseError);
+}
+
 /**
  * @brief Parse the header of a sysex message
  * This extracts the message ID, attitude byte, and message type.
@@ -1012,6 +1035,7 @@ static void parseSysExMessage(byte *data, unsigned int length)
     savePreset();
 
     // send affirmative response
+    sendAffirmativeResponse(msgId, msgType);
   }
   else if (msgType == MsgTypes::GetSlot)
   {
@@ -1026,7 +1050,7 @@ static void parseSysExMessage(byte *data, unsigned int length)
 
     // send the message
     byte slotInfo[10] = {
-        MsgTypes::GetSlotReturn,
+        MsgTypes::GetSlot,
         preset,
         slot,
         trigger,
@@ -1037,7 +1061,7 @@ static void parseSysExMessage(byte *data, unsigned int length)
         data2,
         data3};
 
-    sendSystemExclusive(slotInfo, 10, msgId, Attitude::Response);
+    sendSystemExclusive(slotInfo, 10, msgId, Condition::ResponseOk);
   }
   else if (msgType == MsgTypes::SetSystemParam)
   {
@@ -1048,10 +1072,14 @@ static void parseSysExMessage(byte *data, unsigned int length)
     {
       xprintf("SetSystemParam: CurrentPreset: %d\n", value);
       setCurrentPreset(value);
+
+      // send affirmative response
+      sendAffirmativeResponse(msgId, msgType);
     }
     else
     {
       xprintf("Unsupported system param: %d\n", param);
+      sendErrorResponse(msgId, msgType);
     }
   }
   else if (msgType == MsgTypes::GetSystemParam)
@@ -1062,15 +1090,16 @@ static void parseSysExMessage(byte *data, unsigned int length)
     if (param == SystemParams::CurrentPreset)
     {
       byte paramInfo[3] = {
-          MsgTypes::GetSystemParamReturn,
+          MsgTypes::GetSystemParam,
           SystemParams::CurrentPreset,
           CURRENT_PRESET};
 
-      sendSystemExclusive(paramInfo, 7, msgId, Attitude::Response);
+      sendSystemExclusive(paramInfo, 7, msgId, Condition::ResponseOk);
     }
     else
     {
       xprintf("Unsupported system param: %d\n", param);
+      sendErrorResponse(msgId, msgType);
     }
   }
   else if (msgType == MsgTypes::GetPreset)
@@ -1092,20 +1121,23 @@ static void parseSysExMessage(byte *data, unsigned int length)
       presetData[i * BYTES_PER_SLOT + 6] = data3;
     }
     // now create an array with the message type and the preset data
-    byte presetInfo[BYTES_PER_SLOT * SLOTS_PER_PRESET + 2] = {MsgTypes::GetPresetReturn, preset};
+    byte presetInfo[BYTES_PER_SLOT * SLOTS_PER_PRESET + 2] = {MsgTypes::GetPreset, preset};
 
     // copy the preset data into the array
     memcpy(presetInfo + 2, presetData, BYTES_PER_SLOT * SLOTS_PER_PRESET);
 
     // send the message
-    sendSystemExclusive(presetInfo, BYTES_PER_SLOT * SLOTS_PER_PRESET + 2, msgId, Attitude::Response);
+    sendSystemExclusive(presetInfo, BYTES_PER_SLOT * SLOTS_PER_PRESET + 2, msgId, Condition::ResponseOk);
   }
   else
   {
     Serial.print(F("Unsupported message type:"));
+
     // print hex msg type
     printHexArray(&msgType, 1);
     Serial.println();
+
+    sendErrorResponse(msgId, msgType);
   }
 }
 
