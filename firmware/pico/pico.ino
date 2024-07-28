@@ -11,6 +11,7 @@
 // sysex
 #define MFID_1 0x53
 #define MFID_2 0x4d
+#define HEADER_LENGTH 8
 
 // settings
 #define SAVE_TO_EEPROM 1
@@ -130,6 +131,13 @@ enum MsgTypes
 enum SystemParams
 {
   CurrentPreset = 0, // the current preset
+};
+
+enum Attitude
+{
+  Request = 0,
+  Response = 1,
+  Ack = 2,
 };
 
 // declare defaults
@@ -399,57 +407,6 @@ static void sendProgramChange(byte channel, byte number)
   MIDICoreSerial.sendProgramChange(number, channel);
 }
 
-/**
- * @brief Send a system exclusive message
- * This includes the MFID_ARRAY, the message ID, and the F0 and F7 bytes.
- * @param data
- * @param length
- * @param response - if true, then the message is a response to a request
- */
-void sendSystemExclusive(byte *data, unsigned int length, unsigned short msg_id, bool response = false)
-{
-  // calculate response byte
-  byte responseByte = response ? 0x01 : 0x00;
-
-  // calculate full length
-  unsigned int fullLength = length + 2 + 3 + 2 + 1; // 2 for end caps, 3 for MFID_ARRAY, 2 for msg id, 1 for response
-  byte fullData[fullLength];
-
-  // start cap
-  fullData[0] = 0xF0;
-
-  // copy MFID_ARRAY to data
-  memcpy(fullData + 1, MFID_ARRAY, 3);
-
-  // copy message ID
-  byte msgIdArray[2];
-
-  // convert to bytes
-  msgIdArray[0] = msg_id & 0xFF;
-  msgIdArray[1] = (msg_id >> 8) & 0xFF;
-
-  // copy to data
-  memcpy(fullData + 4, msgIdArray, 2);
-
-  // copy response byte
-  fullData[7] = responseByte;
-
-  // copy data
-  memcpy(fullData + 8, data, length);
-
-  // end cap
-  fullData[fullLength - 1] = 0xF7;
-
-  // print
-  xprintf("OUT: SysEx (%d): ", fullLength);
-  printHexArray(fullData, fullLength);
-  xprintf("\n");
-
-  // send the message
-  // sendSysEx (int length, const byte *const array, bool ArrayContainsBoundaries=false)
-  MIDICoreUSB.sendSysEx(fullLength, fullData, true);
-  MIDICoreSerial.sendSysEx(fullLength, fullData, true);
-}
 // -- message creation
 
 /**
@@ -940,27 +897,74 @@ static void onSystemExclusive(byte *data, unsigned int length)
     parseSysExMessage(data, length);
   }
   else if (!checkVendor(data, length)) // if it doesn't match the vendor ID
-  {                                    // do nothing
-  }
+    xprintf("Vendor ID doesn't match\n");
   else
     Serial.println(F("Unexplained issue! The SysEx message is not getting processed"));
 }
 
 /**
+ * @brief Send a system exclusive message
+ * This includes the MFID_ARRAY, the message ID, and the F0 and F7 bytes.
+ * @param data
+ * @param length
+ * @param attitude
+ */
+void sendSystemExclusive(byte *data, unsigned int length, unsigned short msg_id, byte attitude)
+{
+  // calculate full length
+  unsigned int fullLength = length + 2 + 3 + 2 + 1; // 2 for end caps, 3 for MFID_ARRAY, 2 for msg id, 1 for attitude
+  byte fullData[fullLength];
+
+  // start cap
+  fullData[0] = 0xF0;
+
+  // copy MFID_ARRAY to data
+  memcpy(fullData + 1, MFID_ARRAY, 3);
+
+  // copy message ID
+  byte msgIdArray[2];
+
+  // convert to bytes
+  msgIdArray[0] = msg_id & 0xFF;
+  msgIdArray[1] = (msg_id >> 8) & 0xFF;
+
+  // copy to data
+  memcpy(fullData + 4, msgIdArray, 2);
+
+  // copy attitude byte
+  fullData[6] = attitude;
+
+  // copy data
+  memcpy(fullData + 7, data, length);
+
+  // end cap
+  fullData[fullLength - 1] = 0xF7;
+
+  // print
+  xprintf("OUT: SysEx (%d): ", fullLength);
+  printHexArray(fullData, fullLength);
+  xprintf("\n");
+
+  // send the message
+  // sendSysEx (int length, const byte *const array, bool ArrayContainsBoundaries=false)
+  MIDICoreUSB.sendSysEx(fullLength, fullData, true);
+  MIDICoreSerial.sendSysEx(fullLength, fullData, true);
+}
+/**
  * @brief Parse the header of a sysex message
- * This extracts the message ID, response byte, and message type.
+ * This extracts the message ID, attitude byte, and message type.
  * This does not check the vendor ID.
  *
  * @param data
  * @param msg_id
- * @param response
+ * @param attitude
  * @param msgType
  */
-void parseHeaderBrief(byte *data, unsigned short *msgId, bool *response, byte *msgType)
+void parseHeaderBrief(byte *data, unsigned short *msgId, byte *attitude, byte *msgType)
 {
   *msgId = data[4] + (data[5] << 8);
-  *response = data[7];
-  *msgType = data[8];
+  *attitude = data[6];
+  *msgType = data[7];
 }
 
 /**
@@ -973,18 +977,19 @@ static void parseSysExMessage(byte *data, unsigned int length)
 {
   // parse header
   unsigned short msgId;
-  bool response;
+  byte attitude;
   byte msgType;
-  parseHeaderBrief(data, &msgId, &response, &msgType);
+  parseHeaderBrief(data, &msgId, &attitude, &msgType);
 
   // get address of the data + 9
-  byte *meat = data + 9;
+  byte *meat = data + HEADER_LENGTH;
+  int meatLength = length - 8;
 
   // check message types
   if (msgType == MsgTypes::SetSlot)
   {
     // check length
-    if (length != 15) // including the 0xF0 and 0xF7
+    if (meatLength != 9)
     {
       xprintf("Invalid message length for SetSlot: %d\n", length);
       return;
@@ -1032,7 +1037,7 @@ static void parseSysExMessage(byte *data, unsigned int length)
         data2,
         data3};
 
-    sendSystemExclusive(slotInfo, 10, true); // true means it's a response
+    sendSystemExclusive(slotInfo, 10, msgId, Attitude::Response);
   }
   else if (msgType == MsgTypes::SetSystemParam)
   {
@@ -1061,7 +1066,7 @@ static void parseSysExMessage(byte *data, unsigned int length)
           SystemParams::CurrentPreset,
           CURRENT_PRESET};
 
-      sendSystemExclusive(paramInfo, 7, true); // true means it's a response
+      sendSystemExclusive(paramInfo, 7, msgId, Attitude::Response);
     }
     else
     {
@@ -1093,11 +1098,14 @@ static void parseSysExMessage(byte *data, unsigned int length)
     memcpy(presetInfo + 2, presetData, BYTES_PER_SLOT * SLOTS_PER_PRESET);
 
     // send the message
-    sendSystemExclusive(presetInfo, BYTES_PER_SLOT * SLOTS_PER_PRESET + 2, true);
+    sendSystemExclusive(presetInfo, BYTES_PER_SLOT * SLOTS_PER_PRESET + 2, msgId, Attitude::Response);
   }
   else
   {
-    Serial.println(F("Unsupported message type"));
+    Serial.print(F("Unsupported message type:"));
+    // print hex msg type
+    printHexArray(&msgType, 1);
+    Serial.println();
   }
 }
 
