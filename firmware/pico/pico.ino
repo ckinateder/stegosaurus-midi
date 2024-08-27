@@ -335,7 +335,7 @@ void executeSwitchAction(Trigger trigger, byte switchNum)
  * @param number
  * @param value
  */
-static void onControlChange(byte channel, byte number, byte value)
+void onControlChange(byte channel, byte number, byte value)
 {
   xprintf("IN: CC: CH %d, CC %d, VAL %d\n", channel, number, value);
 }
@@ -346,7 +346,7 @@ static void onControlChange(byte channel, byte number, byte value)
  * @param channel
  * @param number
  */
-static void onProgramChange(byte channel, byte number)
+void onProgramChange(byte channel, byte number)
 {
   xprintf("IN: PC: CH %d, PC %d\n", channel, number);
 }
@@ -356,7 +356,7 @@ static void onProgramChange(byte channel, byte number)
  *
  * @param message
  */
-static void onMessageUSB(const MidiMessage &message)
+void onMessageUSB(const MidiMessage &message)
 {
   // xprintf("USB: ");
   // printHexArray(message, message.length);
@@ -369,7 +369,7 @@ static void onMessageUSB(const MidiMessage &message)
  *
  * @param message
  */
-static void onMessageSerial(const MidiMessage &message)
+void onMessageSerial(const MidiMessage &message)
 {
   // xprintf("Serial: ");
   // printHexArray(message.data(), message.length());
@@ -384,7 +384,7 @@ static void onMessageSerial(const MidiMessage &message)
  * @param number
  * @param value
  */
-static void sendControlChange(byte channel, byte number, byte value)
+void sendControlChange(byte channel, byte number, byte value)
 {
   xprintf("OUT: ControlChange: CH %d, CC %d, VAL %d\n", channel, number, value);
   MIDICoreUSB.sendControlChange(number, value, channel);
@@ -397,7 +397,7 @@ static void sendControlChange(byte channel, byte number, byte value)
  * @param channel
  * @param number
  */
-static void sendProgramChange(byte channel, byte number)
+void sendProgramChange(byte channel, byte number)
 {
   xprintf("OUT: ProgramChange: CH %d, PC %d\n", channel, number);
   MIDICoreUSB.sendProgramChange(number, channel);
@@ -864,7 +864,7 @@ bool checkVendor(const byte *data, unsigned int size)
  * @param data
  * @param length
  */
-static void onSystemExclusive(byte *data, unsigned int length)
+void onSystemExclusive(byte *data, unsigned int length)
 {
   // check last byte in msg - if it is F0, then more is coming
   // if it is F7, it is the last
@@ -996,7 +996,7 @@ void parseHeaderBrief(byte *data, unsigned short *msgId, byte *attitude, byte *m
  * @param data
  * @param length
  */
-static void parseSysExMessage(byte *data, unsigned int length)
+void parseSysExMessage(byte *data, unsigned int length)
 {
   // parse header
   unsigned short msgId;
