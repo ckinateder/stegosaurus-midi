@@ -3,7 +3,7 @@
 # stegosaurus
 
 
-Stegoaurus is an open-source MIDI controller. The controller is built around the Arduino framework and uses the MIDI protocol to communicate with a computer. It is designed to be easily configurable, with the ability to change the behavior of the controller using SysEx messages. 
+Stegosaurus is an open-source MIDI controller. The controller is built around the Arduino framework and uses the MIDI protocol to communicate with a computer. It is designed to be easily configurable, with the ability to change the behavior of the controller using SysEx messages. 
 
 TODO:
 - [x] Add hardware MIDI support to the Pico
@@ -15,7 +15,7 @@ TODO:
 - [ ] Pinouts
 ## Project Structure
 
-THis project is organized as follows:
+This project is organized as follows:
 
 - [`firmware/`](firmware/): main firmware code
 - [`interface/`](interface/): code for the web interface
